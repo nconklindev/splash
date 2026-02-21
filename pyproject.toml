@@ -1,6 +1,16 @@
 [project]
 name = "splash"
 version = "0.1.0"
-description = "Add your description here"
+description = "CLI tool for analyzing BIRT report execution data — parses CSV exports and generates interactive HTML dashboards"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "click",
+    "jinja2",
+]
+
+[project.scripts]
+splash = "splash.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
