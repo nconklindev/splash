@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ data.title }}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg: '#0f1117',
+        surface: '#1a1d27',
+        bdr: '#2a2d3a',
+        muted: '#8b8fa3',
+        accent: '#6c7aee',
+        'accent-light': '#8b96f7',
+      }
+    }
+  }
+}
+</script>
+<style>
+  /* Tailwind doesn't handle table hover on child elements well, keep this one rule */
+  tr:hover td { background: rgba(108, 122, 238, 0.05); }
+</style>
+</head>
+<body class="bg-bg text-gray-200 font-sans leading-relaxed p-8">
+
+<h1 class="text-3xl font-bold mb-1">{{ data.title }}</h1>
+<div class="text-muted text-sm mb-8 flex flex-wrap gap-x-6">
+  <span>Generated: {{ data.generated_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+  <span>Rows: {{ data.total_rows | fmt_number }}</span>
+  <span>Files: {{ data.csv_files | join(', ') }}</span>
+</div>
+
+<div class="bg-surface border border-bdr rounded-lg px-5 py-4 mb-8 text-sm">
+  <strong class="text-accent-light">Detected columns ({{ data.available_columns | length }}):</strong>
+  {% for col in data.available_columns %}<code class="bg-bg px-1.5 py-0.5 rounded text-xs mx-0.5">{{ col }}</code>{% endfor %}
+</div>
+
+{# ── Inventory (always present) ── #}
+{% if data.inventory %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Report Inventory</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.inventory.unique_report_count | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Unique Reports</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.total_rows | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    {% if data.inventory.reports_by_type %}
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.inventory.reports_by_type | length }}</div>
+      <div class="text-xs text-muted mt-1">Report Types</div>
+    </div>
+    {% endif %}
+    {% if data.inventory.parameter_variation_counts %}
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.inventory.parameter_variation_counts | map(attribute=1) | sum }}</div>
+      <div class="text-xs text-muted mt-1">Parameter Variations</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    <div>
+      <h3 class="text-sm font-medium mb-3">Top Reports by Frequency</h3>
+      <canvas id="topReportsChart"></canvas>
+    </div>
+    {% if data.inventory.reports_by_type %}
+    <div class="relative w-full max-w-[300px] max-h-[300px] mx-auto">
+      <h3 class="text-sm font-medium mb-3">Reports by Type</h3>
+      <canvas id="reportTypeChart"></canvas>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if data.inventory.report_overview %}
+  <h3 class="text-sm font-medium mt-5 mb-2">Report Overview</h3>
+  <div class="overflow-x-auto">
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+        {% if data.inventory.reports_by_type %}<th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Type</th>{% endif %}
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Hyperfind</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Work Unit Hyperfind</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeframe Start</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeframe End</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Executions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.inventory.report_overview %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+        {% if data.inventory.reports_by_type %}<td class="px-3 py-2 border-b border-bdr">{{ row.get('report_type', '') }}</td>{% endif %}
+        <td class="px-3 py-2 border-b border-bdr">{{ row.hyperfind_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.work_unit_hyperfind_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.timeframe_start }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.timeframe_end }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.executions }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  {% if data.inventory.parameter_variation_counts %}
+  <h3 class="text-sm font-medium mt-5 mb-2">Parameter Variations per Report</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Distinct Parameter Sets</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for name, count in data.inventory.parameter_variation_counts %}
+      <tr><td class="px-3 py-2 border-b border-bdr">{{ name }}</td><td class="text-right px-3 py-2 border-b border-bdr">{{ count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Timing & Scheduling ── #}
+{% if data.timing %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Timing &amp; Scheduling</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Duration Distribution</h3>
+      <canvas id="durationChart"></canvas>
+    </div>
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Executions per Hour of Day</h3>
+      <canvas id="hourlyChart"></canvas>
+    </div>
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-10">
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Executions per Day of Week</h3>
+      <canvas id="weeklyChart"></canvas>
+    </div>
+    {% if data.timing.overlapping_runs %}
+    <div>
+      <h3 class="text-sm font-medium mb-3">Overlapping Runs ({{ data.timing.overlapping_runs | length }})</h3>
+      <table class="w-full border-collapse text-sm mt-2">
+        <thead>
+          <tr>
+            <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+            <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
+            <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">End</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data.timing.overlapping_runs[:15] %}
+          <tr>
+            <td class="px-3 py-2 border-b border-bdr">{{ row.get('report_name', '') }}</td>
+            <td class="px-3 py-2 border-b border-bdr">{{ row.get('start_datetime', row.get('birt_report_starttime', '')) }}</td>
+            <td class="px-3 py-2 border-b border-bdr">{{ row.get('end_datetime', row.get('birt_report_endtime', '')) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Error Analysis ── #}
+{% if data.errors %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Error Analysis</h2>
+
+  {# KPIs #}
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.errors.total_executions | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-red-400">{{ data.errors.failure_count | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Failures</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold {% if data.errors.failure_rate > 10 %}text-red-400{% elif data.errors.failure_rate > 5 %}text-orange-400{% else %}text-green-400{% endif %}">{{ data.errors.failure_rate | fmt_pct }}</div>
+      <div class="text-xs text-muted mt-1">Failure Rate</div>
+    </div>
+  </div>
+
+  {# Charts row 1: error codes, failures per day #}
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    {% if data.errors.error_code_distribution %}
+    <div class="relative w-full max-w-[300px] max-h-[300px] mx-auto">
+      <h3 class="text-sm font-medium mb-3">Error Codes</h3>
+      <canvas id="errorCodeChart"></canvas>
+    </div>
+    {% endif %}
+    {% if data.errors.failures_per_day %}
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failures per Day</h3>
+      <canvas id="failuresPerDayChart"></canvas>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Charts row 2: failure rate by report, failures by hour #}
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
+    {% if data.errors.failure_rate_by_report %}
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failure Rate by Report</h3>
+      <canvas id="failureRateByReportChart"></canvas>
+    </div>
+    {% endif %}
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failures by Hour of Day</h3>
+      <canvas id="failuresByHourChart"></canvas>
+    </div>
+  </div>
+
+  {# Charts row 3: failures by engine #}
+  {% if data.errors.failures_by_engine %}
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failure Rate by Engine</h3>
+      <canvas id="failuresByEngineChart"></canvas>
+    </div>
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failure Count by Engine</h3>
+      <canvas id="failureCountByEngineChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Error message groups #}
+  {% if data.errors.error_message_groups %}
+  <h3 class="text-sm font-medium mt-6 mb-2">Error Messages</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Count</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for msg, count in data.errors.error_message_groups.items() %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr font-mono text-xs break-all">{{ msg }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr text-red-400">{{ count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Concurrent load at failure time #}
+  {% if data.errors.concurrent_load_at_failure %}
+  <h3 class="text-sm font-medium mt-6 mb-2">Concurrent Load at Failure Time</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start Time</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Concurrent Reports</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.errors.concurrent_load_at_failure[:20] %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.start }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr {% if row.concurrent_count > 10 %}text-orange-400{% endif %}">{{ row.concurrent_count }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.error_code }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Failure rate by report table #}
+  {% if data.errors.failure_rate_by_report %}
+  <h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Total</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Failures</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.errors.failure_rate_by_report %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.name }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.total }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr text-red-400">{{ row.failures }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr {% if row.rate > 50 %}text-red-400{% elif row.rate > 10 %}text-orange-400{% else %}text-green-400{% endif %}">{{ row.rate | fmt_pct }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# Failure detail log #}
+  {% if data.errors.failure_detail %}
+  <h3 class="text-sm font-medium mt-6 mb-2">Failure Detail Log ({{ data.errors.failure_detail | length }})</h3>
+  <div class="overflow-x-auto">
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Status</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Queue</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Engine</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.errors.failure_detail %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr text-red-400">{{ row.status }}</td>
+        <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">{{ row.start }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.duration_s | fmt_duration if row.duration_s is not none else '' }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.queue_s | fmt_duration if row.queue_s is not none else '' }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.engine }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.error_code }}</td>
+        <td class="px-3 py-2 border-b border-bdr text-xs break-all max-w-xs">{{ row.error_message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Engine Routing ── #}
+{% if data.engine %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Engine Routing</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    {% if data.engine.load_per_engine %}
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Load per Engine</h3>
+      <canvas id="engineLoadChart"></canvas>
+    </div>
+    {% endif %}
+    {% if data.engine.load_per_node %}
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Load per Node</h3>
+      <canvas id="nodeLoadChart"></canvas>
+    </div>
+    {% endif %}
+  </div>
+  {% if data.engine.mismatch_rate is not none %}
+  <div class="bg-bg border border-bdr rounded-lg p-5 text-center max-w-[250px] my-5">
+    <div class="text-3xl font-bold {% if data.engine.mismatch_rate > 10 %}text-orange-400{% else %}text-green-400{% endif %}">{{ data.engine.mismatch_rate | fmt_pct }}</div>
+    <div class="text-xs text-muted mt-1">Expected vs Actual Mismatch Rate</div>
+  </div>
+  {% endif %}
+  {% if data.engine.mismatch_samples %}
+  <h3 class="text-sm font-medium mt-5 mb-2">Mismatch Samples</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Expected</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Actual</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.engine.mismatch_samples[:10] %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.expected }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.actual }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Performance ── #}
+{% if data.performance %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Performance</h2>
+
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6 mb-6">
+    {% if data.performance.file_size_stats %}
+    <div>
+      <h3 class="text-sm font-medium mb-2">File Size Stats</h3>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">{{ data.performance.file_size_stats.min | fmt_bytes }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">{{ data.performance.file_size_stats.max | fmt_bytes }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">{{ data.performance.file_size_stats.mean | fmt_bytes }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">{{ data.performance.file_size_stats.median | fmt_bytes }}</div></div>
+      </div>
+    </div>
+    {% endif %}
+    {% if data.performance.object_count_stats %}
+    <div>
+      <h3 class="text-sm font-medium mb-2">Object Count Stats</h3>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">{{ data.performance.object_count_stats.min | fmt_number }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">{{ data.performance.object_count_stats.max | fmt_number }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">{{ data.performance.object_count_stats.mean | fmt_number }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">{{ data.performance.object_count_stats.median | fmt_number }}</div></div>
+      </div>
+    </div>
+    {% endif %}
+    {% if data.performance.queue_time_stats %}
+    <div>
+      <h3 class="text-sm font-medium mb-2">Queue Time (wait before execution)</h3>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">{{ data.performance.queue_time_stats.min | fmt_duration }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">{{ data.performance.queue_time_stats.max | fmt_duration }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">{{ data.performance.queue_time_stats.mean | fmt_duration }}</div></div>
+        <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">{{ data.performance.queue_time_stats.median | fmt_duration }}</div></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if data.performance.duration_vs_size %}
+  <div class="relative w-full mb-6">
+    <h3 class="text-sm font-medium mb-3">Duration vs File Size</h3>
+    <canvas id="scatterChart"></canvas>
+  </div>
+  {% endif %}
+
+  <h3 class="text-sm font-medium mb-2">Slowest Reports</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Queue</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Engine</th>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.performance.slowest_reports %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.duration_s | fmt_duration }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.get('queue_s', 0) | fmt_duration }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.get('engine', '') }}</td>
+        <td class="px-3 py-2 border-b border-bdr">{{ row.get('start', '') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<footer class="text-center text-muted text-xs mt-8 pt-4 border-t border-bdr">
+  Generated by <strong>splash</strong> v0.1.0
+</footer>
+
+<script>
+Chart.defaults.color = '#8b8fa3';
+Chart.defaults.borderColor = '#2a2d3a';
+const PALETTE = ['#6c7aee','#4ade80','#fb923c','#f87171','#facc15','#a78bfa','#38bdf8','#f472b6','#34d399','#818cf8'];
+
+function barChart(id, labels, values, color) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: color || PALETTE[0],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function doughnutChart(id, labels, values) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: PALETTE.slice(0, labels.length),
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, padding: 8 } } }
+    }
+  });
+}
+
+function lineChart(id, labels, values) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        borderColor: PALETTE[3],
+        backgroundColor: 'rgba(248,113,113,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+{# ── Inventory charts ── #}
+{% if data.inventory %}
+barChart('topReportsChart',
+  {{ data.inventory.top_reports_by_frequency[:15] | map(attribute=0) | list | tojson }},
+  {{ data.inventory.top_reports_by_frequency[:15] | map(attribute=1) | list | tojson }},
+  PALETTE[0]
+);
+{% if data.inventory.reports_by_type %}
+doughnutChart('reportTypeChart',
+  {{ data.inventory.reports_by_type.keys() | list | tojson }},
+  {{ data.inventory.reports_by_type.values() | list | tojson }}
+);
+{% endif %}
+{% endif %}
+
+{# ── Timing charts ── #}
+{% if data.timing %}
+barChart('durationChart',
+  {{ data.timing.duration_buckets.keys() | list | tojson }},
+  {{ data.timing.duration_buckets.values() | list | tojson }},
+  PALETTE[5]
+);
+barChart('hourlyChart',
+  {{ data.timing.hourly_distribution.keys() | list | tojson }},
+  {{ data.timing.hourly_distribution.values() | list | tojson }},
+  PALETTE[6]
+);
+barChart('weeklyChart',
+  {{ data.timing.weekly_distribution.keys() | list | tojson }},
+  {{ data.timing.weekly_distribution.values() | list | tojson }},
+  PALETTE[1]
+);
+{% endif %}
+
+{# ── Error charts ── #}
+{% if data.errors %}
+{% if data.errors.error_code_distribution %}
+doughnutChart('errorCodeChart',
+  {{ data.errors.error_code_distribution.keys() | list | tojson }},
+  {{ data.errors.error_code_distribution.values() | list | tojson }}
+);
+{% endif %}
+{% if data.errors.failures_per_day %}
+lineChart('failuresPerDayChart',
+  {{ data.errors.failures_per_day | map(attribute=0) | list | tojson }},
+  {{ data.errors.failures_per_day | map(attribute=1) | list | tojson }}
+);
+{% endif %}
+{% if data.errors.failure_rate_by_report %}
+(function() {
+  const items = {{ data.errors.failure_rate_by_report | tojson }};
+  const top = items.filter(r => r.failures > 0).slice(0, 15);
+  barChart('failureRateByReportChart',
+    top.map(r => r.name),
+    top.map(r => r.rate),
+    PALETTE[3]
+  );
+})();
+{% endif %}
+barChart('failuresByHourChart',
+  {{ data.errors.failures_by_hour.keys() | list | tojson }},
+  {{ data.errors.failures_by_hour.values() | list | tojson }},
+  PALETTE[3]
+);
+{% if data.errors.failures_by_engine %}
+(function() {
+  const engines = {{ data.errors.failures_by_engine | tojson }};
+  const labels = Object.keys(engines);
+  barChart('failuresByEngineChart',
+    labels,
+    labels.map(k => engines[k].rate),
+    PALETTE[2]
+  );
+  barChart('failureCountByEngineChart',
+    labels,
+    labels.map(k => engines[k].failures),
+    PALETTE[3]
+  );
+})();
+{% endif %}
+{% endif %}
+
+{# ── Engine charts ── #}
+{% if data.engine %}
+{% if data.engine.load_per_engine %}
+barChart('engineLoadChart',
+  {{ data.engine.load_per_engine.keys() | list | tojson }},
+  {{ data.engine.load_per_engine.values() | list | tojson }},
+  PALETTE[2]
+);
+{% endif %}
+{% if data.engine.load_per_node %}
+barChart('nodeLoadChart',
+  {{ data.engine.load_per_node.keys() | list | tojson }},
+  {{ data.engine.load_per_node.values() | list | tojson }},
+  PALETTE[7]
+);
+{% endif %}
+{% endif %}
+
+{# ── Performance scatter ── #}
+{% if data.performance and data.performance.duration_vs_size %}
+(function() {
+  const ctx = document.getElementById('scatterChart');
+  if (!ctx) return;
+  const pts = {{ data.performance.duration_vs_size | tojson }};
+  new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        data: pts.map(p => ({x: p.duration_s, y: p.size})),
+        backgroundColor: 'rgba(108,122,238,0.6)',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const p = pts[ctx.dataIndex];
+              return p.name + ': ' + p.duration_s + 's, ' + (p.size/1024).toFixed(1) + 'KB';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Duration (s)' } },
+        y: { title: { display: true, text: 'File Size (bytes)' } }
+      }
+    }
+  });
+})();
+{% endif %}
+</script>
+</body>
+</html>
