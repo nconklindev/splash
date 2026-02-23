@@ -602,7 +602,11 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
             rb["queue_times"].append(qt)
         start = _get_start(row)
         ae = row.get(Column.ACTUAL_ENGINE)
+        ee = row.get(Column.EXPECTED_ENGINE)
         status_id = row.get(Column.REPORT_EXECUTION_STATUS_ID)
+        fs = row.get(Column.OUTPUT_FILE_SIZE)
+        oc = row.get(Column.REPORT_OBJECT_COUNT)
+        rn = row.get(Column.ROUTE_TO_NODE)
         rb["executions"].append(
             {
                 "start": start.strftime("%Y-%m-%d %H:%M:%S")
@@ -614,6 +618,12 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
                 if isinstance(status_id, int)
                 else str(status_id or ""),
                 "engine": _engine_label(ae) if ae is not None and ae != "" else "",
+                "expected_engine": _engine_label(ee)
+                if ee is not None and ee != ""
+                else "",
+                "node": str(rn).strip() if rn else "",
+                "file_size": fs if isinstance(fs, int) else None,
+                "object_count": oc if isinstance(oc, int) else None,
                 "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
                 "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
             }
@@ -626,13 +636,23 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
         failures = rb["failures"]
         durations = rb["durations"]
         queue_times = rb["queue_times"]
+        sorted_dur = sorted(durations)
+        p90_dur = (
+            round(sorted_dur[int(len(sorted_dur) * 0.9)], 2)
+            if len(sorted_dur) >= 10
+            else None
+        )
         reports[name] = {
             "total": total,
             "failures": failures,
             "failure_rate": round(failures / total * 100, 2) if total else 0.0,
             "avg_duration_s": round(mean(durations), 2) if durations else None,
+            "median_duration_s": round(median(durations), 2) if durations else None,
+            "p90_duration_s": p90_dur,
             "max_duration_s": round(max(durations), 2) if durations else None,
+            "min_duration_s": round(min(durations), 2) if durations else None,
             "avg_queue_s": round(mean(queue_times), 2) if queue_times else None,
+            "max_queue_s": round(max(queue_times), 2) if queue_times else None,
             "executions": rb["executions"][:500],
         }
 
