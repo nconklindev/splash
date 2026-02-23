@@ -1,0 +1,276 @@
+function buildReportHTML(rd, report) {
+  const execs = rd.executions || [];
+  const withDur = execs.filter(e => e.duration_s != null);
+  const withQueue = execs.filter(e => e.queue_s != null);
+  const frClass = rd.failure_rate > 50 ? 'text-red-400' : rd.failure_rate > 10 ? 'text-orange-400' : 'text-green-400';
+
+  // ── Derived distributions (computed client-side from executions) ──
+  const statusCounts = {};
+  execs.forEach(e => { const s = e.status || 'UNKNOWN'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
+
+  const engineCounts = {};
+  execs.forEach(e => { if (e.engine) engineCounts[e.engine] = (engineCounts[e.engine] || 0) + 1; });
+  const hasEngine = Object.keys(engineCounts).length > 0;
+
+  const errorCodeCounts = {};
+  execs.forEach(e => {
+    if ((e.status === 'FAILED' || e.status === 'SUSPENDED') && e.error_code)
+      errorCodeCounts[e.error_code] = (errorCodeCounts[e.error_code] || 0) + 1;
+  });
+  const hasErrorCodes = Object.keys(errorCodeCounts).length > 0;
+
+  // Optional columns: show only when data present
+  const hasNode = execs.some(e => e.node);
+  const hasFileSize = execs.some(e => e.file_size != null);
+  const hasObjCount = execs.some(e => e.object_count != null);
+  // Show expected engine col only when at least one mismatch exists
+  const hasMismatch = execs.some(e => e.expected_engine && e.engine && e.expected_engine !== e.engine);
+
+  // ── KPI cards ──
+  let kpis = `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtNumber(rd.total)}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-red-400">${fmtNumber(rd.failures)}</div>
+      <div class="text-xs text-muted mt-1">Failures</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold ${frClass}">${fmtPct(rd.failure_rate)}</div>
+      <div class="text-xs text-muted mt-1">Failure Rate</div>
+    </div>`;
+  if (rd.avg_duration_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.avg_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">Avg Duration</div>
+    </div>`;
+  if (rd.median_duration_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.median_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">Median Duration</div>
+    </div>`;
+  if (rd.p90_duration_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.p90_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">P90 Duration</div>
+    </div>`;
+  if (rd.max_duration_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.max_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">Max Duration</div>
+    </div>`;
+  if (rd.avg_queue_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.avg_queue_s)}</div>
+      <div class="text-xs text-muted mt-1">Avg Queue</div>
+    </div>`;
+  if (rd.max_queue_s != null) kpis += `
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.max_queue_s)}</div>
+      <div class="text-xs text-muted mt-1">Max Queue</div>
+    </div>`;
+
+  // ── Charts ──
+  // Row 1: Status distribution + Engine distribution + Error codes (when present)
+  let chartsRow1 = `<div class="relative w-full max-w-[260px]">
+      <h3 class="text-sm font-medium mb-3">Status Distribution</h3>
+      <canvas id="r_statusDist"></canvas>
+    </div>`;
+  if (hasEngine) chartsRow1 += `
+    <div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Engine Distribution</h3>
+      <canvas id="r_engineDist"></canvas>
+    </div>`;
+  if (hasErrorCodes) chartsRow1 += `
+    <div class="relative w-full max-w-[260px]">
+      <h3 class="text-sm font-medium mb-3">Error Codes</h3>
+      <canvas id="r_errorCodes"></canvas>
+    </div>`;
+
+  // Row 2: Duration histogram + Hourly run pattern (only when timing data available)
+  let chartsRow2 = '';
+  if (withDur.length) {
+    chartsRow2 = `<div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6 mt-6">
+      <div class="relative w-full">
+        <h3 class="text-sm font-medium mb-3">Duration Distribution</h3>
+        <canvas id="r_durHist"></canvas>
+      </div>
+      <div class="relative w-full">
+        <h3 class="text-sm font-medium mb-3">Executions by Hour of Day</h3>
+        <canvas id="r_hourly"></canvas>
+      </div>
+    </div>`;
+  }
+
+  // Row 3: Duration trend + Queue trend
+  let trendParts = '';
+  if (withDur.length) trendParts += `
+      <div class="relative w-full">
+        <h3 class="text-sm font-medium mb-3">Duration over Time <span class="text-xs text-muted font-normal">(red = failures)</span></h3>
+        <canvas id="r_durationTrend"></canvas>
+      </div>`;
+  if (withQueue.length) trendParts += `
+      <div class="relative w-full">
+        <h3 class="text-sm font-medium mb-3">Queue Time over Time</h3>
+        <canvas id="r_queueTrend"></canvas>
+      </div>`;
+  const chartsRow3 = trendParts
+    ? `<div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6 mt-6">${trendParts}</div>`
+    : '';
+
+  // ── Execution log ──
+  const TH = 'px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide';
+  let logHead = `
+      <th class="text-left ${TH}">Start</th>
+      <th class="text-right ${TH}">Duration</th>
+      <th class="text-right ${TH}">Queue</th>
+      <th class="text-left ${TH}">Status</th>
+      <th class="text-left ${TH}">Engine</th>`;
+  if (hasMismatch) logHead += `<th class="text-left ${TH}">Expected Engine</th>`;
+  if (hasNode)     logHead += `<th class="text-left ${TH}">Node</th>`;
+  if (hasFileSize) logHead += `<th class="text-right ${TH}">File Size</th>`;
+  if (hasObjCount) logHead += `<th class="text-right ${TH}">Objects</th>`;
+  logHead += `
+      <th class="text-left ${TH}">Error Code</th>
+      <th class="text-left ${TH}">Error Message</th>`;
+
+  const logRows = execs.map(e => {
+    const isErr = e.status === 'FAILED' || e.status === 'SUSPENDED';
+    const isMismatch = e.expected_engine && e.engine && e.expected_engine !== e.engine;
+    const rowStyle = isErr ? ' style="background:rgba(248,113,113,0.05)"' : '';
+    let cells = `
+        <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${esc(e.start)}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.duration_s)}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.queue_s)}</td>
+        <td class="px-3 py-2 border-b border-bdr ${isErr ? 'text-red-400' : 'text-green-400'}">${esc(e.status)}</td>
+        <td class="px-3 py-2 border-b border-bdr ${isMismatch ? 'text-orange-400' : ''}">${esc(e.engine)}</td>`;
+    if (hasMismatch) cells += `<td class="px-3 py-2 border-b border-bdr ${isMismatch ? 'text-orange-400 font-medium' : 'text-muted'}">${esc(e.expected_engine||'')}</td>`;
+    if (hasNode)     cells += `<td class="px-3 py-2 border-b border-bdr text-muted text-xs">${esc(e.node||'')}</td>`;
+    if (hasFileSize) cells += `<td class="text-right px-3 py-2 border-b border-bdr">${e.file_size != null ? fmtBytes(e.file_size) : ''}</td>`;
+    if (hasObjCount) cells += `<td class="text-right px-3 py-2 border-b border-bdr">${e.object_count != null ? fmtNumber(e.object_count) : ''}</td>`;
+    cells += `
+        <td class="px-3 py-2 border-b border-bdr">${esc(e.error_code||'')}</td>
+        <td class="px-3 py-2 border-b border-bdr text-xs break-all max-w-xs">${esc(e.error_message||'')}</td>`;
+    return `<tr${rowStyle}>${cells}</tr>`;
+  }).join('');
+
+  return `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">${esc(report)}</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-2">${kpis}</div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-6 mt-6">${chartsRow1}</div>
+  ${chartsRow2}
+  ${chartsRow3}
+  <h3 class="text-sm font-medium mt-6 mb-1">Execution Log</h3>
+  <p class="text-xs text-muted mb-2">${execs.length} runs</p>
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse text-sm mt-2">
+      <thead><tr>${logHead}</tr></thead>
+      <tbody>${logRows}</tbody>
+    </table>
+  </div>
+</div>`;
+}
+
+function initReportCharts(rd) {
+  const execs = rd.executions || [];
+  const withDur = execs.filter(e => e.duration_s != null);
+  const withQueue = execs.filter(e => e.queue_s != null);
+
+  // Status distribution donut
+  const statusCounts = {};
+  execs.forEach(e => { const s = e.status || 'UNKNOWN'; statusCounts[s] = (statusCounts[s] || 0) + 1; });
+  if (Object.keys(statusCounts).length) {
+    _track(doughnutChart('r_statusDist', Object.keys(statusCounts), Object.values(statusCounts)));
+  }
+
+  // Engine distribution bar
+  const engineCounts = {};
+  execs.forEach(e => { if (e.engine) engineCounts[e.engine] = (engineCounts[e.engine] || 0) + 1; });
+  if (Object.keys(engineCounts).length) {
+    _track(barChart('r_engineDist', Object.keys(engineCounts), Object.values(engineCounts), PALETTE[2]));
+  }
+
+  // Error code distribution (failures only)
+  const errorCodeCounts = {};
+  execs.forEach(e => {
+    if ((e.status === 'FAILED' || e.status === 'SUSPENDED') && e.error_code)
+      errorCodeCounts[e.error_code] = (errorCodeCounts[e.error_code] || 0) + 1;
+  });
+  if (Object.keys(errorCodeCounts).length) {
+    _track(doughnutChart('r_errorCodes', Object.keys(errorCodeCounts), Object.values(errorCodeCounts)));
+  }
+
+  // Duration histogram
+  if (withDur.length) {
+    const DUR_BUCKETS = [['<1s',0,1],['1-10s',1,10],['10s-1m',10,60],['1-5m',60,300],['5-30m',300,1800],['30m+',1800,Infinity]];
+    const durHist = {'<1s':0,'1-10s':0,'10s-1m':0,'1-5m':0,'5-30m':0,'30m+':0};
+    withDur.forEach(e => {
+      for (const [label, lo, hi] of DUR_BUCKETS) {
+        if (e.duration_s >= lo && e.duration_s < hi) { durHist[label]++; break; }
+      }
+    });
+    _track(barChart('r_durHist', Object.keys(durHist), Object.values(durHist), PALETTE[5]));
+  }
+
+  // Hourly run pattern
+  const hourlyMap = {};
+  for (let h = 0; h < 24; h++) hourlyMap[h] = 0;
+  execs.forEach(e => {
+    if (e.start) {
+      const h = parseInt((e.start.split(' ')[1] || '').split(':')[0]);
+      if (!isNaN(h) && h >= 0 && h < 24) hourlyMap[h]++;
+    }
+  });
+  _track(barChart('r_hourly', Object.keys(hourlyMap).map(Number), Object.values(hourlyMap), PALETTE[6]));
+
+  // Duration trend — failure runs shown as red dots
+  if (withDur.length) {
+    const el = document.getElementById('r_durationTrend');
+    if (el) _track(new Chart(el, {
+      type: 'line',
+      data: {
+        labels: withDur.map(e => e.start),
+        datasets: [{
+          data: withDur.map(e => e.duration_s),
+          borderColor: PALETTE[0],
+          backgroundColor: 'rgba(108,122,238,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: withDur.map(e => (e.status === 'FAILED' || e.status === 'SUSPENDED') ? 5 : 3),
+          pointBackgroundColor: withDur.map(e => (e.status === 'FAILED' || e.status === 'SUSPENDED') ? '#f87171' : PALETTE[0]),
+          pointBorderColor: 'transparent',
+        }]
+      },
+      options: {
+        responsive: true, aspectRatio: 3,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    }));
+  }
+
+  // Queue time trend
+  if (withQueue.length) {
+    const el = document.getElementById('r_queueTrend');
+    if (el) _track(new Chart(el, {
+      type: 'line',
+      data: {
+        labels: withQueue.map(e => e.start),
+        datasets: [{
+          data: withQueue.map(e => e.queue_s),
+          borderColor: PALETTE[1],
+          backgroundColor: 'rgba(74,222,128,0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true, aspectRatio: 3,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+      }
+    }));
+  }
+}
