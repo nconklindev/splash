@@ -13,6 +13,7 @@ class Column(StrEnum):
     REPORT_NAME = "report_name"
     REPORT_TYPE = "report_type"
     PARAMETERS = "parameters"
+    SCHEMA_NAME = "schema_name"
     # Timing
     START_DATETIME = "start_datetime"
     END_DATETIME = "end_datetime"
@@ -175,6 +176,8 @@ def load_csvs(paths: list[Path]) -> Dataset:
                     clean_key = orig_key.strip().lower()
                     row[clean_key] = _normalize_value(clean_key, value or "")
                 _extract_parameter_fields(row)
+                if not row.get(Column.REPORT_NAME):
+                    continue
                 all_rows.append(row)
 
     all_headers = sorted(all_headers_set)

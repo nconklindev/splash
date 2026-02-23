@@ -56,6 +56,15 @@ class PerformanceData:
 
 
 @dataclass
+class TenantSummary:
+    schema_name: str
+    total_executions: int
+    failure_count: int
+    failure_rate: float
+    unique_reports: int
+
+
+@dataclass
 class DashboardData:
     title: str
     generated_at: datetime
@@ -67,3 +76,5 @@ class DashboardData:
     errors: ErrorData | None = None
     engine: EngineData | None = None
     performance: PerformanceData | None = None
+    tenant_summaries: list[TenantSummary] | None = None
+    per_tenant_json: dict | None = None

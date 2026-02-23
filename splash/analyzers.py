@@ -5,13 +5,14 @@ from collections import Counter
 from datetime import datetime
 from statistics import mean, median
 
-from .loader import ENGINE_LABELS, Column, Dataset, _FAILURE_STATUSES
+from .loader import ENGINE_LABELS, STATUS_LABELS, Column, Dataset, _FAILURE_STATUSES
 from .models import (
     DashboardData,
     EngineData,
     ErrorData,
     InventoryData,
     PerformanceData,
+    TenantSummary,
     TimingData,
 )
 
@@ -506,13 +507,127 @@ def analyze_performance(dataset: Dataset) -> PerformanceData | None:
     )
 
 
+def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
+    """Build a JSON-serializable dict for a single tenant, running all five analyses."""
+    sub_ds = Dataset(
+        rows=tenant_rows,
+        available_columns=dataset.available_columns,
+        all_headers=dataset.all_headers,
+    )
+
+    inv = analyze_inventory(sub_ds)
+    timing = analyze_timing(sub_ds)
+    errors = analyze_errors(sub_ds)
+    engine = analyze_engine(sub_ds)
+    perf = analyze_performance(sub_ds)
+
+    # Overlapping runs — raw rows still contain datetime objects; stringify them
+    overlapping_runs = []
+    if timing:
+        for row in timing.overlapping_runs[:15]:
+            start = row.get(Column.START_DATETIME) or row.get(Column.BIRT_REPORT_STARTTIME)
+            end = row.get(Column.END_DATETIME) or row.get(Column.BIRT_REPORT_ENDTIME)
+            overlapping_runs.append({
+                "report_name": row.get(Column.REPORT_NAME, ""),
+                "start_datetime": start.strftime("%Y-%m-%d %H:%M:%S") if isinstance(start, datetime) else str(start or ""),
+                "end_datetime": end.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end, datetime) else str(end or ""),
+            })
+
+    # Per-report drill-down data
+    report_buckets: dict[str, dict] = {}
+    for row in tenant_rows:
+        name = row.get(Column.REPORT_NAME, "")
+        if not name:
+            continue
+        if name not in report_buckets:
+            report_buckets[name] = {"total": 0, "failures": 0, "durations": [], "queue_times": [], "executions": []}
+        rb = report_buckets[name]
+        rb["total"] += 1
+        if _is_failure(row):
+            rb["failures"] += 1
+        dur = _get_duration_seconds(row)
+        if dur is not None and dur >= 0:
+            rb["durations"].append(dur)
+        qt = _get_queue_time_seconds(row)
+        if qt is not None and qt >= 0:
+            rb["queue_times"].append(qt)
+        start = _get_start(row)
+        ae = row.get(Column.ACTUAL_ENGINE)
+        status_id = row.get(Column.REPORT_EXECUTION_STATUS_ID)
+        rb["executions"].append({
+            "start": start.strftime("%Y-%m-%d %H:%M:%S") if isinstance(start, datetime) else "",
+            "duration_s": round(dur, 2) if dur is not None else None,
+            "queue_s": round(qt, 2) if qt is not None else None,
+            "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})") if isinstance(status_id, int) else str(status_id or ""),
+            "engine": _engine_label(ae) if ae is not None and ae != "" else "",
+            "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
+            "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
+        })
+
+    reports: dict[str, dict] = {}
+    for name, rb in report_buckets.items():
+        rb["executions"].sort(key=lambda x: x["start"])
+        total = rb["total"]
+        failures = rb["failures"]
+        durations = rb["durations"]
+        queue_times = rb["queue_times"]
+        reports[name] = {
+            "total": total,
+            "failures": failures,
+            "failure_rate": round(failures / total * 100, 2) if total else 0.0,
+            "avg_duration_s": round(mean(durations), 2) if durations else None,
+            "max_duration_s": round(max(durations), 2) if durations else None,
+            "avg_queue_s": round(mean(queue_times), 2) if queue_times else None,
+            "executions": rb["executions"][:500],
+        }
+
+    return {
+        # Inventory
+        "unique_report_count": inv.unique_report_count,
+        "top_reports_by_frequency": [[n, c] for n, c in inv.top_reports_by_frequency[:15]],
+        "reports_by_type": inv.reports_by_type,
+        "report_overview": inv.report_overview,
+        "parameter_variation_counts": [[n, c] for n, c in inv.parameter_variation_counts] if inv.parameter_variation_counts else None,
+        # Timing
+        "duration_buckets": dict(timing.duration_buckets) if timing else {},
+        "hourly_distribution": {str(k): v for k, v in timing.hourly_distribution.items()} if timing else {},
+        "weekly_distribution": dict(timing.weekly_distribution) if timing else {},
+        "overlapping_runs": overlapping_runs,
+        # Errors
+        "total_executions": errors.total_executions,
+        "failure_count": errors.failure_count,
+        "failure_rate": errors.failure_rate,
+        "error_code_distribution": errors.error_code_distribution,
+        "failures_per_day": [[d, c] for d, c in errors.failures_per_day],
+        "failure_rate_by_report": errors.failure_rate_by_report,
+        "failures_by_hour": {str(k): v for k, v in errors.failures_by_hour.items()},
+        "failures_by_engine": errors.failures_by_engine,
+        "concurrent_load_at_failure": errors.concurrent_load_at_failure[:20],
+        "error_message_groups": errors.error_message_groups,
+        "failure_detail": errors.failure_detail[:200],
+        # Engine
+        "load_per_engine": engine.load_per_engine if engine else None,
+        "load_per_node": engine.load_per_node if engine else None,
+        "mismatch_rate": engine.mismatch_rate if engine else None,
+        "mismatch_samples": engine.mismatch_samples if engine else None,
+        # Performance
+        "slowest_reports": perf.slowest_reports if perf else [],
+        "duration_vs_size": perf.duration_vs_size if perf else None,
+        "file_size_stats": perf.file_size_stats if perf else None,
+        "object_count_stats": perf.object_count_stats if perf else None,
+        "queue_time_stats": perf.queue_time_stats if perf else None,
+        # Per-report drill-down
+        "reports": reports,
+    }
+
+
 def run_all_analyses(
     dataset: Dataset,
     *,
     title: str,
     csv_files: list[str],
 ) -> DashboardData:
-    return DashboardData(
+    dd = DashboardData(
         title=title,
         generated_at=datetime.now(),
         total_rows=len(dataset.rows),
@@ -524,3 +639,30 @@ def run_all_analyses(
         engine=analyze_engine(dataset),
         performance=analyze_performance(dataset),
     )
+
+    if dataset.has(Column.SCHEMA_NAME):
+        tenant_groups: dict[str, list[dict]] = {}
+        for row in dataset.rows:
+            sn = row.get(Column.SCHEMA_NAME, "")
+            if not sn:
+                continue
+            tenant_groups.setdefault(str(sn), []).append(row)
+
+        if tenant_groups:
+            summaries = []
+            for sn, rows in tenant_groups.items():
+                failure_count = sum(1 for r in rows if _is_failure(r))
+                unique_reports = len({r.get(Column.REPORT_NAME, "") for r in rows})
+                total = len(rows)
+                summaries.append(TenantSummary(
+                    schema_name=sn,
+                    total_executions=total,
+                    failure_count=failure_count,
+                    failure_rate=round(failure_count / total * 100, 2) if total else 0.0,
+                    unique_reports=unique_reports,
+                ))
+            summaries.sort(key=lambda x: x.total_executions, reverse=True)
+            dd.tenant_summaries = summaries
+            dd.per_tenant_json = {sn: _build_tenant_json(rows, dataset) for sn, rows in tenant_groups.items()}
+
+    return dd
