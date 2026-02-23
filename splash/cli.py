@@ -12,10 +12,20 @@ from .renderer import render_dashboard
 
 
 @click.command()
-@click.argument("csv_files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path))
-@click.option("-o", "--output", default="splash_report.html", type=click.Path(path_type=Path), help="Output HTML path.")
+@click.argument(
+    "csv_files", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path)
+)
+@click.option(
+    "-o",
+    "--output",
+    default="splash_report.html",
+    type=click.Path(path_type=Path),
+    help="Output HTML path.",
+)
 @click.option("--title", default="Splash Report", help="Dashboard title.")
-@click.option("--open", "open_browser", is_flag=True, help="Open in browser after generation.")
+@click.option(
+    "--open", "open_browser", is_flag=True, help="Open in browser after generation."
+)
 @click.option("-q", "--quiet", is_flag=True, help="Suppress info output.")
 @click.version_option(version=__version__)
 def main(
@@ -32,7 +42,9 @@ def main(
     dataset = load_csvs(list(csv_files))
 
     if not quiet:
-        click.echo(f"  {len(dataset.rows)} rows, {len(dataset.available_columns)} known columns detected")
+        click.echo(
+            f"  {len(dataset.rows)} rows, {len(dataset.available_columns)} known columns detected"
+        )
 
     data = run_all_analyses(
         dataset,

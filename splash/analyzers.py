@@ -71,8 +71,12 @@ def _get_queue_time_seconds(row: dict) -> float | None:
 
 
 def analyze_timing(dataset: Dataset) -> TimingData | None:
-    has_start = dataset.has(Column.START_DATETIME) or dataset.has(Column.BIRT_REPORT_STARTTIME)
-    has_end = dataset.has(Column.END_DATETIME) or dataset.has(Column.BIRT_REPORT_ENDTIME)
+    has_start = dataset.has(Column.START_DATETIME) or dataset.has(
+        Column.BIRT_REPORT_STARTTIME
+    )
+    has_end = dataset.has(Column.END_DATETIME) or dataset.has(
+        Column.BIRT_REPORT_ENDTIME
+    )
     if not (has_start and has_end):
         return None
 
@@ -148,7 +152,11 @@ def analyze_inventory(dataset: Dataset) -> InventoryData:
 
         if dataset.has(Column.PARAMETERS):
             params = row.get(Column.PARAMETERS, "")
-            key = json.dumps(params, sort_keys=True) if isinstance(params, dict) else str(params)
+            key = (
+                json.dumps(params, sort_keys=True)
+                if isinstance(params, dict)
+                else str(params)
+            )
             param_sets.setdefault(name, set()).add(key)
 
         # Build overview: keep first-seen values for each report
@@ -262,8 +270,12 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
         status_id = row.get(Column.REPORT_EXECUTION_STATUS_ID)
         entry = {
             "report_name": row.get(Column.REPORT_NAME, ""),
-            "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})") if isinstance(status_id, int) else str(status_id),
-            "start": start.strftime("%Y-%m-%d %H:%M:%S") if isinstance(start, datetime) else "",
+            "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})")
+            if isinstance(status_id, int)
+            else str(status_id),
+            "start": start.strftime("%Y-%m-%d %H:%M:%S")
+            if isinstance(start, datetime)
+            else "",
             "duration_s": round(dur, 2) if dur is not None else None,
             "queue_s": round(qt, 2) if qt is not None else None,
             "engine": _engine_label(ae) if ae is not None and ae != "" else "",
@@ -280,12 +292,14 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
         t = report_totals[name]
         f = report_failures.get(name, 0)
         if t > 0:
-            failure_rate_by_report.append({
-                "name": name,
-                "total": t,
-                "failures": f,
-                "rate": round(f / t * 100, 1),
-            })
+            failure_rate_by_report.append(
+                {
+                    "name": name,
+                    "total": t,
+                    "failures": f,
+                    "rate": round(f / t * 100, 1),
+                }
+            )
     failure_rate_by_report.sort(key=lambda x: x["rate"], reverse=True)
 
     # 3. Failures by engine
@@ -319,12 +333,14 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
             # Overlaps if i_start < f_end and i_end > f_start
             if i_start < f_end and i_end > f_start:
                 count += 1
-        concurrent_load.append({
-            "report_name": row.get(Column.REPORT_NAME, ""),
-            "start": f_start.strftime("%Y-%m-%d %H:%M:%S"),
-            "concurrent_count": count,
-            "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
-        })
+        concurrent_load.append(
+            {
+                "report_name": row.get(Column.REPORT_NAME, ""),
+                "start": f_start.strftime("%Y-%m-%d %H:%M:%S"),
+                "concurrent_count": count,
+                "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
+            }
+        )
     concurrent_load.sort(key=lambda x: x["concurrent_count"], reverse=True)
 
     # 6. Error message groups
@@ -334,7 +350,9 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
         total_executions=total,
         failure_count=failure_count,
         failure_rate=round(failure_rate, 2),
-        error_code_distribution=dict(error_codes.most_common()) if error_codes else None,
+        error_code_distribution=dict(error_codes.most_common())
+        if error_codes
+        else None,
         failures_per_day=failures_per_day,
         most_failing_reports=report_failures.most_common(20),
         failure_detail=failure_detail,
@@ -369,15 +387,25 @@ def analyze_engine(dataset: Dataset) -> EngineData | None:
         if dataset.has(Column.ACTUAL_ENGINE) and dataset.has(Column.EXPECTED_ENGINE):
             actual = row.get(Column.ACTUAL_ENGINE)
             expected = row.get(Column.EXPECTED_ENGINE)
-            if actual != "" and expected != "" and actual is not None and expected is not None and actual != expected:
+            if (
+                actual != ""
+                and expected != ""
+                and actual is not None
+                and expected is not None
+                and actual != expected
+            ):
                 mismatches.append(row)
 
-    total_with_both = sum(
-        1
-        for r in dataset.rows
-        if r.get(Column.ACTUAL_ENGINE) not in ("", None)
-        and r.get(Column.EXPECTED_ENGINE) not in ("", None)
-    ) if dataset.has(Column.ACTUAL_ENGINE) and dataset.has(Column.EXPECTED_ENGINE) else None
+    total_with_both = (
+        sum(
+            1
+            for r in dataset.rows
+            if r.get(Column.ACTUAL_ENGINE) not in ("", None)
+            and r.get(Column.EXPECTED_ENGINE) not in ("", None)
+        )
+        if dataset.has(Column.ACTUAL_ENGINE) and dataset.has(Column.EXPECTED_ENGINE)
+        else None
+    )
 
     mismatch_rate = None
     if total_with_both:
@@ -404,8 +432,12 @@ def analyze_engine(dataset: Dataset) -> EngineData | None:
 
 
 def analyze_performance(dataset: Dataset) -> PerformanceData | None:
-    has_start = dataset.has(Column.START_DATETIME) or dataset.has(Column.BIRT_REPORT_STARTTIME)
-    has_end = dataset.has(Column.END_DATETIME) or dataset.has(Column.BIRT_REPORT_ENDTIME)
+    has_start = dataset.has(Column.START_DATETIME) or dataset.has(
+        Column.BIRT_REPORT_STARTTIME
+    )
+    has_end = dataset.has(Column.END_DATETIME) or dataset.has(
+        Column.BIRT_REPORT_ENDTIME
+    )
     if not (has_start and has_end):
         return None
 
@@ -443,11 +475,13 @@ def analyze_performance(dataset: Dataset) -> PerformanceData | None:
         for dur, row in timed_rows:
             size = row.get(Column.OUTPUT_FILE_SIZE)
             if isinstance(size, int):
-                points.append({
-                    "name": row.get(Column.REPORT_NAME, ""),
-                    "duration_s": round(dur, 2),
-                    "size": size,
-                })
+                points.append(
+                    {
+                        "name": row.get(Column.REPORT_NAME, ""),
+                        "duration_s": round(dur, 2),
+                        "size": size,
+                    }
+                )
         if points:
             dur_vs_size = points[:500]  # cap for chart performance
 
@@ -487,7 +521,8 @@ def analyze_performance(dataset: Dataset) -> PerformanceData | None:
     queue_stats = None
     if dataset.has(Column.START_DATETIME) and dataset.has(Column.BIRT_REPORT_STARTTIME):
         queue_times = [
-            qt for row in dataset.rows
+            qt
+            for row in dataset.rows
             if (qt := _get_queue_time_seconds(row)) is not None and qt >= 0
         ]
         if queue_times:
@@ -525,13 +560,21 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
     overlapping_runs = []
     if timing:
         for row in timing.overlapping_runs[:15]:
-            start = row.get(Column.START_DATETIME) or row.get(Column.BIRT_REPORT_STARTTIME)
+            start = row.get(Column.START_DATETIME) or row.get(
+                Column.BIRT_REPORT_STARTTIME
+            )
             end = row.get(Column.END_DATETIME) or row.get(Column.BIRT_REPORT_ENDTIME)
-            overlapping_runs.append({
-                "report_name": row.get(Column.REPORT_NAME, ""),
-                "start_datetime": start.strftime("%Y-%m-%d %H:%M:%S") if isinstance(start, datetime) else str(start or ""),
-                "end_datetime": end.strftime("%Y-%m-%d %H:%M:%S") if isinstance(end, datetime) else str(end or ""),
-            })
+            overlapping_runs.append(
+                {
+                    "report_name": row.get(Column.REPORT_NAME, ""),
+                    "start_datetime": start.strftime("%Y-%m-%d %H:%M:%S")
+                    if isinstance(start, datetime)
+                    else str(start or ""),
+                    "end_datetime": end.strftime("%Y-%m-%d %H:%M:%S")
+                    if isinstance(end, datetime)
+                    else str(end or ""),
+                }
+            )
 
     # Per-report drill-down data
     report_buckets: dict[str, dict] = {}
@@ -540,7 +583,13 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
         if not name:
             continue
         if name not in report_buckets:
-            report_buckets[name] = {"total": 0, "failures": 0, "durations": [], "queue_times": [], "executions": []}
+            report_buckets[name] = {
+                "total": 0,
+                "failures": 0,
+                "durations": [],
+                "queue_times": [],
+                "executions": [],
+            }
         rb = report_buckets[name]
         rb["total"] += 1
         if _is_failure(row):
@@ -554,15 +603,21 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
         start = _get_start(row)
         ae = row.get(Column.ACTUAL_ENGINE)
         status_id = row.get(Column.REPORT_EXECUTION_STATUS_ID)
-        rb["executions"].append({
-            "start": start.strftime("%Y-%m-%d %H:%M:%S") if isinstance(start, datetime) else "",
-            "duration_s": round(dur, 2) if dur is not None else None,
-            "queue_s": round(qt, 2) if qt is not None else None,
-            "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})") if isinstance(status_id, int) else str(status_id or ""),
-            "engine": _engine_label(ae) if ae is not None and ae != "" else "",
-            "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
-            "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
-        })
+        rb["executions"].append(
+            {
+                "start": start.strftime("%Y-%m-%d %H:%M:%S")
+                if isinstance(start, datetime)
+                else "",
+                "duration_s": round(dur, 2) if dur is not None else None,
+                "queue_s": round(qt, 2) if qt is not None else None,
+                "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})")
+                if isinstance(status_id, int)
+                else str(status_id or ""),
+                "engine": _engine_label(ae) if ae is not None and ae != "" else "",
+                "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
+                "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
+            }
+        )
 
     reports: dict[str, dict] = {}
     for name, rb in report_buckets.items():
@@ -584,13 +639,23 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
     return {
         # Inventory
         "unique_report_count": inv.unique_report_count,
-        "top_reports_by_frequency": [[n, c] for n, c in inv.top_reports_by_frequency[:15]],
+        "top_reports_by_frequency": [
+            [n, c] for n, c in inv.top_reports_by_frequency[:15]
+        ],
         "reports_by_type": inv.reports_by_type,
         "report_overview": inv.report_overview,
-        "parameter_variation_counts": [[n, c] for n, c in inv.parameter_variation_counts] if inv.parameter_variation_counts else None,
+        "parameter_variation_counts": [
+            [n, c] for n, c in inv.parameter_variation_counts
+        ]
+        if inv.parameter_variation_counts
+        else None,
         # Timing
         "duration_buckets": dict(timing.duration_buckets) if timing else {},
-        "hourly_distribution": {str(k): v for k, v in timing.hourly_distribution.items()} if timing else {},
+        "hourly_distribution": {
+            str(k): v for k, v in timing.hourly_distribution.items()
+        }
+        if timing
+        else {},
         "weekly_distribution": dict(timing.weekly_distribution) if timing else {},
         "overlapping_runs": overlapping_runs,
         # Errors
@@ -654,15 +719,22 @@ def run_all_analyses(
                 failure_count = sum(1 for r in rows if _is_failure(r))
                 unique_reports = len({r.get(Column.REPORT_NAME, "") for r in rows})
                 total = len(rows)
-                summaries.append(TenantSummary(
-                    schema_name=sn,
-                    total_executions=total,
-                    failure_count=failure_count,
-                    failure_rate=round(failure_count / total * 100, 2) if total else 0.0,
-                    unique_reports=unique_reports,
-                ))
+                summaries.append(
+                    TenantSummary(
+                        schema_name=sn,
+                        total_executions=total,
+                        failure_count=failure_count,
+                        failure_rate=round(failure_count / total * 100, 2)
+                        if total
+                        else 0.0,
+                        unique_reports=unique_reports,
+                    )
+                )
             summaries.sort(key=lambda x: x.total_executions, reverse=True)
             dd.tenant_summaries = summaries
-            dd.per_tenant_json = {sn: _build_tenant_json(rows, dataset) for sn, rows in tenant_groups.items()}
+            dd.per_tenant_json = {
+                sn: _build_tenant_json(rows, dataset)
+                for sn, rows in tenant_groups.items()
+            }
 
     return dd

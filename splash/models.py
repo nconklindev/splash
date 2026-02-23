@@ -17,7 +17,9 @@ class InventoryData:
     unique_report_count: int
     reports_by_type: dict[str, int] | None  # type -> count (None if no report_type col)
     top_reports_by_frequency: list[tuple[str, int]]  # (report_name, count)
-    parameter_variation_counts: list[tuple[str, int]] | None  # (report_name, distinct param count)
+    parameter_variation_counts: (
+        list[tuple[str, int]] | None
+    )  # (report_name, distinct param count)
     report_overview: list[dict] | None  # per-report summary with extracted param fields
 
 
@@ -31,10 +33,16 @@ class ErrorData:
     most_failing_reports: list[tuple[str, int]]  # (report_name, failure count)
     # Extended failure analysis
     failure_detail: list[dict]  # full log of each failed execution
-    failure_rate_by_report: list[dict]  # [{name, total, failures, rate}, ...] sorted by rate desc
-    failures_by_engine: dict[str, dict] | None  # engine label -> {total, failures, rate}
+    failure_rate_by_report: list[
+        dict
+    ]  # [{name, total, failures, rate}, ...] sorted by rate desc
+    failures_by_engine: (
+        dict[str, dict] | None
+    )  # engine label -> {total, failures, rate}
     failures_by_hour: dict[int, int]  # hour (0-23) -> failure count
-    concurrent_load_at_failure: list[dict]  # [{report_name, start, concurrent_count, ...}]
+    concurrent_load_at_failure: list[
+        dict
+    ]  # [{report_name, start, concurrent_count, ...}]
     error_message_groups: dict[str, int] | None  # error message -> count
 
 

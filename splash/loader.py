@@ -98,7 +98,7 @@ def _parse_int(value: str) -> int | str:
         return v
     try:
         return int(float(v))
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return v
 
 
@@ -108,7 +108,7 @@ def _parse_json(value: str) -> dict | str:
         return v
     try:
         return json.loads(v)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         return v
 
 
