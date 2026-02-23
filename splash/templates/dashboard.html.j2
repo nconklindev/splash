@@ -41,6 +41,70 @@ tailwind.config = {
   {% for col in data.available_columns %}<code class="bg-bg px-1.5 py-0.5 rounded text-xs mx-0.5">{{ col }}</code>{% endfor %}
 </div>
 
+{% if data.per_tenant_json %}
+<div id="selectorBar" class="bg-surface border border-bdr rounded-lg px-5 py-4 mb-8 flex flex-wrap gap-6 items-center">
+  <div class="flex items-center gap-2">
+    <label class="text-sm text-muted font-medium">Tenant</label>
+    <select id="tenantDropdown" class="bg-bg border border-bdr text-gray-200 rounded px-3 py-1.5 text-sm">
+      <option value="">All Tenants (Stack)</option>
+      {% for t in data.tenant_summaries %}<option value="{{ t.schema_name }}">{{ t.schema_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div id="reportSelectorWrap" class="hidden flex items-center gap-2">
+    <label class="text-sm text-muted font-medium">Report</label>
+    <select id="reportDropdown" class="bg-bg border border-bdr text-gray-200 rounded px-3 py-1.5 text-sm">
+      <option value="">All Reports (Tenant)</option>
+    </select>
+  </div>
+</div>
+{% endif %}
+
+<div id="viewStack">
+
+{# ── Tenants (only when schema_name column present) ── #}
+{% if data.tenant_summaries %}
+<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Tenants</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.tenant_summaries | length }}</div>
+      <div class="text-xs text-muted mt-1">Tenants</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">{{ data.total_rows | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+  </div>
+  <div class="relative w-full max-w-3xl mb-6">
+    <h3 class="text-sm font-medium mb-3">Executions per Tenant</h3>
+    <canvas id="tenantExecChart"></canvas>
+  </div>
+  <h3 class="text-sm font-medium mb-2">Tenant Summary</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Schema</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Executions</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Failures</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Failure Rate (%)</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Unique Reports</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in data.tenant_summaries %}
+      <tr>
+        <td class="px-3 py-2 border-b border-bdr font-medium">{{ t.schema_name }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ t.total_executions | fmt_number }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr text-red-400">{{ t.failure_count | fmt_number }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr {% if t.failure_rate > 10 %}text-red-400{% elif t.failure_rate > 5 %}text-orange-400{% else %}text-green-400{% endif %}">{{ t.failure_rate | fmt_pct }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ t.unique_reports | fmt_number }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {# ── Inventory (always present) ── #}
 {% if data.inventory %}
 <div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
@@ -147,7 +211,7 @@ tailwind.config = {
     </div>
   </div>
   <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-10">
-    <div class="relative w-full">
+    <div class="relative w-full max-w-3xl">
       <h3 class="text-sm font-medium mb-3">Executions per Day of Week</h3>
       <canvas id="weeklyChart"></canvas>
     </div>
@@ -195,7 +259,7 @@ tailwind.config = {
     </div>
     <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
       <div class="text-3xl font-bold {% if data.errors.failure_rate > 10 %}text-red-400{% elif data.errors.failure_rate > 5 %}text-orange-400{% else %}text-green-400{% endif %}">{{ data.errors.failure_rate | fmt_pct }}</div>
-      <div class="text-xs text-muted mt-1">Failure Rate</div>
+      <div class="text-xs text-muted mt-1">Failure Rate (%)</div>
     </div>
   </div>
 
@@ -219,7 +283,7 @@ tailwind.config = {
   <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
     {% if data.errors.failure_rate_by_report %}
     <div class="relative w-full">
-      <h3 class="text-sm font-medium mb-3">Failure Rate by Report</h3>
+      <h3 class="text-sm font-medium mb-3">Failure Rate by Report (%)</h3>
       <canvas id="failureRateByReportChart"></canvas>
     </div>
     {% endif %}
@@ -233,7 +297,7 @@ tailwind.config = {
   {% if data.errors.failures_by_engine %}
   <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
     <div class="relative w-full">
-      <h3 class="text-sm font-medium mb-3">Failure Rate by Engine</h3>
+      <h3 class="text-sm font-medium mb-3">Failure Rate by Engine (%)</h3>
       <canvas id="failuresByEngineChart"></canvas>
     </div>
     <div class="relative w-full">
@@ -291,7 +355,7 @@ tailwind.config = {
 
   {# Failure rate by report table #}
   {% if data.errors.failure_rate_by_report %}
-  <h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report</h3>
+  <h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report (%)</h3>
   <table class="w-full border-collapse text-sm mt-2">
     <thead>
       <tr>
@@ -441,7 +505,7 @@ tailwind.config = {
   </div>
 
   {% if data.performance.duration_vs_size %}
-  <div class="relative w-full mb-6">
+  <div class="relative w-full max-w-3xl mb-6">
     <h3 class="text-sm font-medium mb-3">Duration vs File Size</h3>
     <canvas id="scatterChart"></canvas>
   </div>
@@ -473,6 +537,11 @@ tailwind.config = {
 </div>
 {% endif %}
 
+</div>{# end #viewStack #}
+
+<div id="viewTenant" class="hidden"></div>
+<div id="viewReport" class="hidden"></div>
+
 <footer class="text-center text-muted text-xs mt-8 pt-4 border-t border-bdr">
   Generated by <strong>splash</strong> v0.1.0
 </footer>
@@ -484,8 +553,8 @@ const PALETTE = ['#6c7aee','#4ade80','#fb923c','#f87171','#facc15','#a78bfa','#3
 
 function barChart(id, labels, values, color) {
   const ctx = document.getElementById(id);
-  if (!ctx) return;
-  new Chart(ctx, {
+  if (!ctx) return null;
+  return new Chart(ctx, {
     type: 'bar',
     data: {
       labels: labels,
@@ -497,6 +566,7 @@ function barChart(id, labels, values, color) {
     },
     options: {
       responsive: true,
+      aspectRatio: 3,
       plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true } }
     }
@@ -505,8 +575,8 @@ function barChart(id, labels, values, color) {
 
 function doughnutChart(id, labels, values) {
   const ctx = document.getElementById(id);
-  if (!ctx) return;
-  new Chart(ctx, {
+  if (!ctx) return null;
+  return new Chart(ctx, {
     type: 'doughnut',
     data: {
       labels: labels,
@@ -525,8 +595,8 @@ function doughnutChart(id, labels, values) {
 
 function lineChart(id, labels, values) {
   const ctx = document.getElementById(id);
-  if (!ctx) return;
-  new Chart(ctx, {
+  if (!ctx) return null;
+  return new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
@@ -541,8 +611,43 @@ function lineChart(id, labels, values) {
     },
     options: {
       responsive: true,
+      aspectRatio: 3,
       plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function _scatterChart(id, pts) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  return new Chart(el, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        data: pts.map(p => ({x: p.duration_s, y: p.size})),
+        backgroundColor: 'rgba(108,122,238,0.6)',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const p = pts[context.dataIndex];
+              return p.name + ': ' + p.duration_s + 's, ' + (p.size/1024).toFixed(1) + 'KB';
+            }
+          }
+        }
+      },
+      aspectRatio: 3,
+      scales: {
+        x: { title: { display: true, text: 'Duration (s)' } },
+        y: { title: { display: true, text: 'File Size (bytes)' } }
+      }
     }
   });
 }
@@ -649,39 +754,477 @@ barChart('nodeLoadChart',
 
 {# ── Performance scatter ── #}
 {% if data.performance and data.performance.duration_vs_size %}
-(function() {
-  const ctx = document.getElementById('scatterChart');
-  if (!ctx) return;
-  const pts = {{ data.performance.duration_vs_size | tojson }};
-  new Chart(ctx, {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        data: pts.map(p => ({x: p.duration_s, y: p.size})),
-        backgroundColor: 'rgba(108,122,238,0.6)',
-        pointRadius: 4,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              const p = pts[ctx.dataIndex];
-              return p.name + ': ' + p.duration_s + 's, ' + (p.size/1024).toFixed(1) + 'KB';
-            }
-          }
-        }
-      },
-      scales: {
-        x: { title: { display: true, text: 'Duration (s)' } },
-        y: { title: { display: true, text: 'File Size (bytes)' } }
-      }
-    }
+_scatterChart('scatterChart', {{ data.performance.duration_vs_size | tojson }});
+{% endif %}
+
+{# ── Multi-tenant drill-down ── #}
+{% if data.per_tenant_json %}
+const TENANT_DATA = {{ data.per_tenant_json | tojson }};
+let _activeCharts = [];
+function _track(c) { if (c) _activeCharts.push(c); }
+function _destroyCharts() { _activeCharts.forEach(c => c.destroy()); _activeCharts = []; }
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function fmtNumber(v) {
+  if (v == null) return '';
+  return Number(v).toLocaleString('en');
+}
+function fmtBytes(v) {
+  if (v == null) return '';
+  let x = parseFloat(v);
+  for (const u of ['B','KB','MB','GB']) {
+    if (Math.abs(x) < 1024) return x.toFixed(1) + ' ' + u;
+    x /= 1024;
+  }
+  return x.toFixed(1) + ' TB';
+}
+function fmtDuration(s) {
+  if (s == null) return '';
+  if (s < 1) return Math.round(s * 1000) + 'ms';
+  if (s < 60) return s.toFixed(1) + 's';
+  const m = s / 60;
+  if (m < 60) return m.toFixed(1) + 'm';
+  return (m / 60).toFixed(1) + 'h';
+}
+function fmtPct(v) { return v == null ? '' : v.toFixed(1) + '%'; }
+
+function showStackView() {
+  _destroyCharts();
+  document.getElementById('viewStack').classList.remove('hidden');
+  document.getElementById('viewTenant').classList.add('hidden');
+  document.getElementById('viewReport').classList.add('hidden');
+  document.getElementById('reportSelectorWrap').classList.add('hidden');
+  document.getElementById('reportDropdown').value = '';
+}
+
+function showTenantView(tenant) {
+  _destroyCharts();
+  const td = TENANT_DATA[tenant];
+  document.getElementById('viewTenant').innerHTML = buildTenantHTML(td, tenant);
+  document.getElementById('viewStack').classList.add('hidden');
+  document.getElementById('viewTenant').classList.remove('hidden');
+  document.getElementById('viewReport').classList.add('hidden');
+  const rd = document.getElementById('reportDropdown');
+  rd.innerHTML = '<option value="">All Reports (Tenant)</option>';
+  Object.keys(td.reports).sort().forEach(r => {
+    rd.innerHTML += `<option value="${esc(r)}">${esc(r)}</option>`;
   });
-})();
+  document.getElementById('reportSelectorWrap').classList.remove('hidden');
+  initTenantCharts(td);
+}
+
+function showReportView(tenant, report) {
+  _destroyCharts();
+  const rd = TENANT_DATA[tenant].reports[report];
+  document.getElementById('viewReport').innerHTML = buildReportHTML(rd, report);
+  document.getElementById('viewStack').classList.add('hidden');
+  document.getElementById('viewTenant').classList.add('hidden');
+  document.getElementById('viewReport').classList.remove('hidden');
+  initReportCharts(rd);
+}
+
+function buildTenantHTML(td, tenant) {
+  const hasType = td.reports_by_type && Object.keys(td.reports_by_type).length > 0;
+  const hasTiming = td.duration_buckets && Object.keys(td.duration_buckets).length > 0;
+
+  // ── Inventory ──
+  let html = `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Report Inventory — ${esc(tenant)}</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtNumber(td.unique_report_count)}</div>
+      <div class="text-xs text-muted mt-1">Unique Reports</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtNumber(td.total_executions)}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    ${hasType ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${Object.keys(td.reports_by_type).length}</div>
+      <div class="text-xs text-muted mt-1">Report Types</div>
+    </div>` : ''}
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    <div><h3 class="text-sm font-medium mb-3">Top Reports by Frequency</h3><canvas id="t_topReports"></canvas></div>
+    ${hasType ? `<div class="relative w-full max-w-[300px] max-h-[300px] mx-auto">
+      <h3 class="text-sm font-medium mb-3">Reports by Type</h3><canvas id="t_reportType"></canvas></div>` : ''}
+  </div>
+  ${td.report_overview ? `<h3 class="text-sm font-medium mt-5 mb-2">Report Overview</h3>
+  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+      ${hasType ? '<th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Type</th>' : ''}
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Hyperfind</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Work Unit Hyperfind</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeframe Start</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeframe End</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Executions</th>
+    </tr></thead>
+    <tbody>${td.report_overview.map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      ${hasType ? `<td class="px-3 py-2 border-b border-bdr">${esc(r.report_type||'')}</td>` : ''}
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.hyperfind_name||'')}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.work_unit_hyperfind_name||'')}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.timeframe_start||'')}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.timeframe_end||'')}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${r.executions}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : ''}
+  ${td.parameter_variation_counts ? `<h3 class="text-sm font-medium mt-5 mb-2">Parameter Variations per Report</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Distinct Parameter Sets</th>
+    </tr></thead>
+    <tbody>${td.parameter_variation_counts.map(([n,c]) => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(n)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${c}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}
+</div>`;
+
+  // ── Timing ──
+  if (hasTiming) {
+    html += `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Timing &amp; Scheduling</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Duration Distribution</h3><canvas id="t_duration"></canvas></div>
+    <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Executions per Hour of Day</h3><canvas id="t_hourly"></canvas></div>
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-10">
+    <div class="relative w-full max-w-3xl"><h3 class="text-sm font-medium mb-3">Executions per Day of Week</h3><canvas id="t_weekly"></canvas></div>
+    ${td.overlapping_runs && td.overlapping_runs.length ? `<div>
+      <h3 class="text-sm font-medium mb-3">Overlapping Runs (${td.overlapping_runs.length})</h3>
+      <table class="w-full border-collapse text-sm mt-2">
+        <thead><tr>
+          <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+          <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
+          <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">End</th>
+        </tr></thead>
+        <tbody>${td.overlapping_runs.map(r => `<tr>
+          <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+          <td class="px-3 py-2 border-b border-bdr">${esc(r.start_datetime)}</td>
+          <td class="px-3 py-2 border-b border-bdr">${esc(r.end_datetime)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>` : ''}
+  </div>
+</div>`;
+  }
+
+  // ── Error Analysis ──
+  const frClass = td.failure_rate > 10 ? 'text-red-400' : td.failure_rate > 5 ? 'text-orange-400' : 'text-green-400';
+  html += `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Error Analysis</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtNumber(td.total_executions)}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-red-400">${fmtNumber(td.failure_count)}</div>
+      <div class="text-xs text-muted mt-1">Failures</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold ${frClass}">${fmtPct(td.failure_rate)}</div>
+      <div class="text-xs text-muted mt-1">Failure Rate (%)</div>
+    </div>
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    ${td.error_code_distribution ? `<div class="relative w-full max-w-[300px] max-h-[300px] mx-auto">
+      <h3 class="text-sm font-medium mb-3">Error Codes</h3><canvas id="t_errorCode"></canvas></div>` : ''}
+    ${td.failures_per_day && td.failures_per_day.length ? `<div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failures per Day</h3><canvas id="t_failuresPerDay"></canvas></div>` : ''}
+  </div>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
+    ${td.failure_rate_by_report && td.failure_rate_by_report.length ? `<div class="relative w-full">
+      <h3 class="text-sm font-medium mb-3">Failure Rate by Report (%)</h3><canvas id="t_failureRateByReport"></canvas></div>` : ''}
+    <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Failures by Hour of Day</h3><canvas id="t_failuresByHour"></canvas></div>
+  </div>
+  ${td.failures_by_engine ? `<div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6 mt-6">
+    <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Failure Rate by Engine (%)</h3><canvas id="t_failuresByEngine"></canvas></div>
+    <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Failure Count by Engine</h3><canvas id="t_failureCountByEngine"></canvas></div>
+  </div>` : ''}
+  ${td.error_message_groups ? `<h3 class="text-sm font-medium mt-6 mb-2">Error Messages</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Count</th>
+    </tr></thead>
+    <tbody>${Object.entries(td.error_message_groups).map(([msg,cnt]) => `<tr>
+      <td class="px-3 py-2 border-b border-bdr font-mono text-xs break-all">${esc(msg)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr text-red-400">${cnt}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}
+  ${td.concurrent_load_at_failure && td.concurrent_load_at_failure.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Concurrent Load at Failure Time</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start Time</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Concurrent Reports</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
+    </tr></thead>
+    <tbody>${td.concurrent_load_at_failure.map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.start)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr ${r.concurrent_count > 10 ? 'text-orange-400' : ''}">${r.concurrent_count}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.error_code)}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}
+  ${td.failure_rate_by_report && td.failure_rate_by_report.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report (%)</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Total</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Failures</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Rate</th>
+    </tr></thead>
+    <tbody>${td.failure_rate_by_report.map(r => {
+      const rc = r.rate > 50 ? 'text-red-400' : r.rate > 10 ? 'text-orange-400' : 'text-green-400';
+      return `<tr>
+        <td class="px-3 py-2 border-b border-bdr">${esc(r.name)}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">${r.total}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr text-red-400">${r.failures}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr ${rc}">${fmtPct(r.rate)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>` : ''}
+  ${td.failure_detail && td.failure_detail.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Failure Detail Log (${td.failure_detail.length})</h3>
+  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Status</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Queue</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Engine</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
+    </tr></thead>
+    <tbody>${td.failure_detail.map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      <td class="px-3 py-2 border-b border-bdr text-red-400">${esc(r.status)}</td>
+      <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${esc(r.start)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.duration_s)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.queue_s)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.engine)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.error_code)}</td>
+      <td class="px-3 py-2 border-b border-bdr text-xs break-all max-w-xs">${esc(r.error_message)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>` : ''}
+</div>`;
+
+  // ── Engine Routing ──
+  if (td.load_per_engine || td.load_per_node) {
+    html += `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Engine Routing</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
+    ${td.load_per_engine ? `<div class="relative w-full"><h3 class="text-sm font-medium mb-3">Load per Engine</h3><canvas id="t_engineLoad"></canvas></div>` : ''}
+    ${td.load_per_node ? `<div class="relative w-full"><h3 class="text-sm font-medium mb-3">Load per Node</h3><canvas id="t_nodeLoad"></canvas></div>` : ''}
+  </div>
+  ${td.mismatch_rate != null ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center max-w-[250px] my-5">
+    <div class="text-3xl font-bold ${td.mismatch_rate > 10 ? 'text-orange-400' : 'text-green-400'}">${fmtPct(td.mismatch_rate)}</div>
+    <div class="text-xs text-muted mt-1">Expected vs Actual Mismatch Rate</div>
+  </div>` : ''}
+  ${td.mismatch_samples && td.mismatch_samples.length ? `<h3 class="text-sm font-medium mt-5 mb-2">Mismatch Samples</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Expected</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Actual</th>
+    </tr></thead>
+    <tbody>${td.mismatch_samples.slice(0,10).map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.expected)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.actual)}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}
+</div>`;
+  }
+
+  // ── Performance ──
+  if (td.slowest_reports && td.slowest_reports.length) {
+    html += `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Performance</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6 mb-6">
+    ${td.file_size_stats ? `<div><h3 class="text-sm font-medium mb-2">File Size Stats</h3>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">${fmtBytes(td.file_size_stats.min)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">${fmtBytes(td.file_size_stats.max)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">${fmtBytes(td.file_size_stats.mean)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">${fmtBytes(td.file_size_stats.median)}</div></div>
+    </div></div>` : ''}
+    ${td.object_count_stats ? `<div><h3 class="text-sm font-medium mb-2">Object Count Stats</h3>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">${fmtNumber(td.object_count_stats.min)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">${fmtNumber(td.object_count_stats.max)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">${fmtNumber(td.object_count_stats.mean)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">${fmtNumber(td.object_count_stats.median)}</div></div>
+    </div></div>` : ''}
+    ${td.queue_time_stats ? `<div><h3 class="text-sm font-medium mb-2">Queue Time (wait before execution)</h3>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-2 mt-2">
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Min</div><div class="text-lg font-semibold">${fmtDuration(td.queue_time_stats.min)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Max</div><div class="text-lg font-semibold">${fmtDuration(td.queue_time_stats.max)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Mean</div><div class="text-lg font-semibold">${fmtDuration(td.queue_time_stats.mean)}</div></div>
+      <div class="bg-bg rounded-md p-3 text-center"><div class="text-[0.7rem] text-muted uppercase">Median</div><div class="text-lg font-semibold">${fmtDuration(td.queue_time_stats.median)}</div></div>
+    </div></div>` : ''}
+  </div>
+  ${td.duration_vs_size && td.duration_vs_size.length ? `<div class="relative w-full max-w-3xl mb-6">
+    <h3 class="text-sm font-medium mb-3">Duration vs File Size</h3><canvas id="t_scatter"></canvas></div>` : ''}
+  <h3 class="text-sm font-medium mb-2">Slowest Reports</h3>
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Queue</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Engine</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start Time</th>
+    </tr></thead>
+    <tbody>${td.slowest_reports.map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.duration_s)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.queue_s||0)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.engine||'')}</td>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.start||'')}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+</div>`;
+  }
+
+  return html;
+}
+
+function buildReportHTML(rd, report) {
+  const frClass = rd.failure_rate > 50 ? 'text-red-400' : rd.failure_rate > 10 ? 'text-orange-400' : 'text-green-400';
+  const withDur = (rd.executions||[]).filter(e => e.duration_s != null);
+  return `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
+  <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">${esc(report)}</h2>
+  <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtNumber(rd.total)}</div>
+      <div class="text-xs text-muted mt-1">Total Executions</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-red-400">${fmtNumber(rd.failures)}</div>
+      <div class="text-xs text-muted mt-1">Failures</div>
+    </div>
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold ${frClass}">${fmtPct(rd.failure_rate)}</div>
+      <div class="text-xs text-muted mt-1">Failure Rate (%)</div>
+    </div>
+    ${rd.avg_duration_s != null ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.avg_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">Avg Duration</div>
+    </div>` : ''}
+    ${rd.max_duration_s != null ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.max_duration_s)}</div>
+      <div class="text-xs text-muted mt-1">Max Duration</div>
+    </div>` : ''}
+    ${rd.avg_queue_s != null ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-accent-light">${fmtDuration(rd.avg_queue_s)}</div>
+      <div class="text-xs text-muted mt-1">Avg Queue</div>
+    </div>` : ''}
+  </div>
+  ${withDur.length ? `<div class="relative w-full mb-6">
+    <h3 class="text-sm font-medium mb-3">Duration over Time</h3>
+    <canvas id="r_durationTrend"></canvas>
+  </div>` : ''}
+  <h3 class="text-sm font-medium mb-2">Execution Log (${(rd.executions||[]).length})</h3>
+  <div class="overflow-x-auto">
+  <table class="w-full border-collapse text-sm mt-2">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Queue</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Status</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Engine</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
+    </tr></thead>
+    <tbody>${(rd.executions||[]).map(e => {
+      const isErr = e.status === 'FAILED' || e.status === 'SUSPENDED';
+      return `<tr>
+        <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${esc(e.start)}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.duration_s)}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.queue_s)}</td>
+        <td class="px-3 py-2 border-b border-bdr ${isErr ? 'text-red-400' : ''}">${esc(e.status)}</td>
+        <td class="px-3 py-2 border-b border-bdr">${esc(e.engine)}</td>
+        <td class="px-3 py-2 border-b border-bdr">${esc(e.error_code)}</td>
+        <td class="px-3 py-2 border-b border-bdr text-xs break-all max-w-xs">${esc(e.error_message)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>
+  </div>
+</div>`;
+}
+
+function initTenantCharts(td) {
+  const top = (td.top_reports_by_frequency||[]).slice(0,15);
+  _track(barChart('t_topReports', top.map(r=>r[0]), top.map(r=>r[1]), PALETTE[0]));
+  if (td.reports_by_type) {
+    _track(doughnutChart('t_reportType', Object.keys(td.reports_by_type), Object.values(td.reports_by_type)));
+  }
+  if (td.duration_buckets) {
+    _track(barChart('t_duration', Object.keys(td.duration_buckets), Object.values(td.duration_buckets), PALETTE[5]));
+  }
+  if (td.hourly_distribution) {
+    _track(barChart('t_hourly', Object.keys(td.hourly_distribution), Object.values(td.hourly_distribution), PALETTE[6]));
+  }
+  if (td.weekly_distribution) {
+    _track(barChart('t_weekly', Object.keys(td.weekly_distribution), Object.values(td.weekly_distribution), PALETTE[1]));
+  }
+  if (td.error_code_distribution) {
+    _track(doughnutChart('t_errorCode', Object.keys(td.error_code_distribution), Object.values(td.error_code_distribution)));
+  }
+  if (td.failures_per_day && td.failures_per_day.length) {
+    _track(lineChart('t_failuresPerDay', td.failures_per_day.map(r=>r[0]), td.failures_per_day.map(r=>r[1])));
+  }
+  if (td.failure_rate_by_report && td.failure_rate_by_report.length) {
+    const topFr = td.failure_rate_by_report.filter(r => r.failures > 0).slice(0,15);
+    _track(barChart('t_failureRateByReport', topFr.map(r=>r.name), topFr.map(r=>r.rate), PALETTE[3]));
+  }
+  if (td.failures_by_hour) {
+    _track(barChart('t_failuresByHour', Object.keys(td.failures_by_hour), Object.values(td.failures_by_hour), PALETTE[3]));
+  }
+  if (td.failures_by_engine) {
+    const eKeys = Object.keys(td.failures_by_engine);
+    _track(barChart('t_failuresByEngine', eKeys, eKeys.map(k=>td.failures_by_engine[k].rate), PALETTE[2]));
+    _track(barChart('t_failureCountByEngine', eKeys, eKeys.map(k=>td.failures_by_engine[k].failures), PALETTE[3]));
+  }
+  if (td.load_per_engine) {
+    _track(barChart('t_engineLoad', Object.keys(td.load_per_engine), Object.values(td.load_per_engine), PALETTE[2]));
+  }
+  if (td.load_per_node) {
+    _track(barChart('t_nodeLoad', Object.keys(td.load_per_node), Object.values(td.load_per_node), PALETTE[7]));
+  }
+  if (td.duration_vs_size && td.duration_vs_size.length) {
+    _track(_scatterChart('t_scatter', td.duration_vs_size));
+  }
+}
+
+function initReportCharts(rd) {
+  const withDur = (rd.executions||[]).filter(e => e.duration_s != null);
+  if (withDur.length) {
+    _track(lineChart('r_durationTrend', withDur.map(e=>e.start), withDur.map(e=>e.duration_s)));
+  }
+}
+
+document.getElementById('tenantDropdown').addEventListener('change', e => {
+  e.target.value ? showTenantView(e.target.value) : showStackView();
+});
+document.getElementById('reportDropdown').addEventListener('change', e => {
+  const t = document.getElementById('tenantDropdown').value;
+  e.target.value ? showReportView(t, e.target.value) : showTenantView(t);
+});
+
+barChart('tenantExecChart',
+  {{ data.tenant_summaries | map(attribute='schema_name') | list | tojson }},
+  {{ data.tenant_summaries | map(attribute='total_executions') | list | tojson }},
+  PALETTE[0]
+);
 {% endif %}
 </script>
 </body>
