@@ -80,7 +80,7 @@ tailwind.config = {
     <canvas id="tenantExecChart"></canvas>
   </div>
   <h3 class="text-sm font-medium mb-2">Tenant Summary</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Schema</th>
@@ -148,7 +148,7 @@ tailwind.config = {
   {% if data.inventory.report_overview %}
   <h3 class="text-sm font-medium mt-5 mb-2">Report Overview</h3>
   <div class="overflow-x-auto">
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
@@ -179,7 +179,7 @@ tailwind.config = {
 
   {% if data.inventory.parameter_variation_counts %}
   <h3 class="text-sm font-medium mt-5 mb-2">Parameter Variations per Report</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
@@ -218,7 +218,7 @@ tailwind.config = {
     {% if data.timing.overlapping_runs %}
     <div>
       <h3 class="text-sm font-medium mb-3">Overlapping Runs ({{ data.timing.overlapping_runs | length }})</h3>
-      <table class="w-full border-collapse text-sm mt-2">
+      <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
         <thead>
           <tr>
             <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
@@ -310,7 +310,7 @@ tailwind.config = {
   {# Error message groups #}
   {% if data.errors.error_message_groups %}
   <h3 class="text-sm font-medium mt-6 mb-2">Error Messages</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
@@ -331,7 +331,7 @@ tailwind.config = {
   {# Concurrent load at failure time #}
   {% if data.errors.concurrent_load_at_failure %}
   <h3 class="text-sm font-medium mt-6 mb-2">Concurrent Load at Failure Time</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
@@ -356,7 +356,7 @@ tailwind.config = {
   {# Failure rate by report table #}
   {% if data.errors.failure_rate_by_report %}
   <h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report (%)</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
@@ -382,7 +382,7 @@ tailwind.config = {
   {% if data.errors.failure_detail %}
   <h3 class="text-sm font-medium mt-6 mb-2">Failure Detail Log ({{ data.errors.failure_detail | length }})</h3>
   <div class="overflow-x-auto">
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
@@ -441,7 +441,7 @@ tailwind.config = {
   {% endif %}
   {% if data.engine.mismatch_samples %}
   <h3 class="text-sm font-medium mt-5 mb-2">Mismatch Samples</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
@@ -512,7 +512,7 @@ tailwind.config = {
   {% endif %}
 
   <h3 class="text-sm font-medium mb-2">Slowest Reports</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
@@ -853,7 +853,7 @@ function buildTenantHTML(td, tenant) {
       <h3 class="text-sm font-medium mb-3">Reports by Type</h3><canvas id="t_reportType"></canvas></div>` : ''}
   </div>
   ${td.report_overview ? `<h3 class="text-sm font-medium mt-5 mb-2">Report Overview</h3>
-  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2">
+  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
       ${hasType ? '<th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Type</th>' : ''}
@@ -874,7 +874,7 @@ function buildTenantHTML(td, tenant) {
     </tr>`).join('')}</tbody>
   </table></div>` : ''}
   ${td.parameter_variation_counts ? `<h3 class="text-sm font-medium mt-5 mb-2">Parameter Variations per Report</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
       <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Distinct Parameter Sets</th>
@@ -898,7 +898,7 @@ function buildTenantHTML(td, tenant) {
     <div class="relative w-full max-w-3xl"><h3 class="text-sm font-medium mb-3">Executions per Day of Week</h3><canvas id="t_weekly"></canvas></div>
     ${td.overlapping_runs && td.overlapping_runs.length ? `<div>
       <h3 class="text-sm font-medium mb-3">Overlapping Runs (${td.overlapping_runs.length})</h3>
-      <table class="w-full border-collapse text-sm mt-2">
+      <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
         <thead><tr>
           <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
           <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
@@ -949,7 +949,7 @@ function buildTenantHTML(td, tenant) {
     <div class="relative w-full"><h3 class="text-sm font-medium mb-3">Failure Count by Engine</h3><canvas id="t_failureCountByEngine"></canvas></div>
   </div>` : ''}
   ${td.error_message_groups ? `<h3 class="text-sm font-medium mt-6 mb-2">Error Messages</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
       <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Count</th>
@@ -975,7 +975,7 @@ function buildTenantHTML(td, tenant) {
     </tr>`).join('')}</tbody>
   </table>` : ''}
   ${td.failure_rate_by_report && td.failure_rate_by_report.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Failure Rate by Report (%)</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
       <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Total</th>
@@ -993,7 +993,7 @@ function buildTenantHTML(td, tenant) {
     }).join('')}</tbody>
   </table>` : ''}
   ${td.failure_detail && td.failure_detail.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Failure Detail Log (${td.failure_detail.length})</h3>
-  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2">
+  <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Status</th>
@@ -1030,7 +1030,7 @@ function buildTenantHTML(td, tenant) {
     <div class="text-xs text-muted mt-1">Expected vs Actual Mismatch Rate</div>
   </div>` : ''}
   ${td.mismatch_samples && td.mismatch_samples.length ? `<h3 class="text-sm font-medium mt-5 mb-2">Mismatch Samples</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report</th>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Expected</th>
@@ -1075,7 +1075,7 @@ function buildTenantHTML(td, tenant) {
   ${td.duration_vs_size && td.duration_vs_size.length ? `<div class="relative w-full max-w-3xl mb-6">
     <h3 class="text-sm font-medium mb-3">Duration vs File Size</h3><canvas id="t_scatter"></canvas></div>` : ''}
   <h3 class="text-sm font-medium mb-2">Slowest Reports</h3>
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
       <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
@@ -1132,9 +1132,10 @@ function buildReportHTML(rd, report) {
     <h3 class="text-sm font-medium mb-3">Duration over Time</h3>
     <canvas id="r_durationTrend"></canvas>
   </div>` : ''}
-  <h3 class="text-sm font-medium mb-2">Execution Log (${(rd.executions||[]).length})</h3>
+  <h3 class="text-sm font-medium mb-2">Execution Log</h3>
+  <p class="text-sm text-muted mb-2">(${(rd.executions||[]).length})</p>
   <div class="overflow-x-auto">
-  <table class="w-full border-collapse text-sm mt-2">
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Start</th>
       <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Duration</th>
