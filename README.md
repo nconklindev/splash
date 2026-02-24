@@ -116,7 +116,8 @@ All other columns are optional — the dashboard adapts to what's available:
 `actual_engine`, `expected_engine`, `requested_engine`, `route_to_node`, `error_code`, `error_message`, `error_stack`,
 `output_file_size`, `report_object_count`, `parameters`
 
-> [!TIP] Including `schema_name` unlocks the multi-tenant drill-down. Including `parameters` enables
+> [!TIP] 
+> Including `schema_name` unlocks the multi-tenant drill-down. Including `parameters` enables
 > hyperfind/timeframe extraction and parameter variation analysis.
 
 Example: `WHERE start_datetime >= NOW() - INTERVAL '48 HOUR'` OR
