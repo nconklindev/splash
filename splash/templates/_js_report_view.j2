@@ -140,7 +140,7 @@ function buildReportHTML(rd, report) {
     const isMismatch = e.expected_engine && e.engine && e.expected_engine !== e.engine;
     const rowStyle = isErr ? ' style="background:rgba(248,113,113,0.05)"' : '';
     let cells = `
-        <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${esc(e.start)}</td>
+        <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${fmtTime(e.start)}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.duration_s)}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(e.queue_s)}</td>
         <td class="px-3 py-2 border-b border-bdr ${isErr ? 'text-red-400' : 'text-green-400'}">${esc(e.status)}</td>
@@ -230,7 +230,7 @@ function initReportCharts(rd) {
     if (el) _track(new Chart(el, {
       type: 'line',
       data: {
-        labels: withDur.map(e => e.start),
+        labels: withDur.map(e => fmtTime(e.start)),
         datasets: [{
           data: withDur.map(e => e.duration_s),
           borderColor: PALETTE[0],
@@ -256,7 +256,7 @@ function initReportCharts(rd) {
     if (el) _track(new Chart(el, {
       type: 'line',
       data: {
-        labels: withQueue.map(e => e.start),
+        labels: withQueue.map(e => fmtTime(e.start)),
         datasets: [{
           data: withQueue.map(e => e.queue_s),
           borderColor: PALETTE[1],

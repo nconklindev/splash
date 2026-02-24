@@ -1,4 +1,6 @@
 function showStackView() {
+  _currentTenant = null;
+  _currentReport = null;
   _destroyCharts();
   document.getElementById('viewStack').classList.remove('hidden');
   document.getElementById('viewTenant').classList.add('hidden');
@@ -8,6 +10,8 @@ function showStackView() {
 }
 
 function showTenantView(tenant) {
+  _currentTenant = tenant;
+  _currentReport = null;
   _destroyCharts();
   const td = TENANT_DATA[tenant];
   document.getElementById('viewTenant').innerHTML = buildTenantHTML(td, tenant);
@@ -24,6 +28,8 @@ function showTenantView(tenant) {
 }
 
 function showReportView(tenant, report) {
+  _currentTenant = tenant;
+  _currentReport = report;
   _destroyCharts();
   const rd = TENANT_DATA[tenant].reports[report];
   document.getElementById('viewReport').innerHTML = buildReportHTML(rd, report);
@@ -113,8 +119,8 @@ function buildTenantHTML(td, tenant) {
         </tr></thead>
         <tbody>${td.overlapping_runs.map(r => `<tr>
           <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
-          <td class="px-3 py-2 border-b border-bdr">${esc(r.start_datetime)}</td>
-          <td class="px-3 py-2 border-b border-bdr">${esc(r.end_datetime)}</td>
+          <td class="px-3 py-2 border-b border-bdr">${fmtTime(r.start_datetime)}</td>
+          <td class="px-3 py-2 border-b border-bdr">${fmtTime(r.end_datetime)}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>` : ''}
@@ -176,7 +182,7 @@ function buildTenantHTML(td, tenant) {
     </tr></thead>
     <tbody>${td.concurrent_load_at_failure.map(r => `<tr>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
-      <td class="px-3 py-2 border-b border-bdr">${esc(r.start)}</td>
+      <td class="px-3 py-2 border-b border-bdr">${fmtTime(r.start)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr ${r.concurrent_count > 10 ? 'text-orange-400' : ''}">${r.concurrent_count}</td>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.error_code)}</td>
     </tr>`).join('')}</tbody>
@@ -214,7 +220,7 @@ function buildTenantHTML(td, tenant) {
     <tbody>${td.failure_detail.map(r => `<tr>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
       <td class="px-3 py-2 border-b border-bdr text-red-400">${esc(r.status)}</td>
-      <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${esc(r.start)}</td>
+      <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${fmtTime(r.start)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.duration_s)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.queue_s)}</td>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.engine)}</td>
@@ -295,7 +301,7 @@ function buildTenantHTML(td, tenant) {
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.duration_s)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.queue_s||0)}</td>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.engine||'')}</td>
-      <td class="px-3 py-2 border-b border-bdr">${esc(r.start||'')}</td>
+      <td class="px-3 py-2 border-b border-bdr">${fmtTime(r.start||'')}</td>
     </tr>`).join('')}</tbody>
   </table>
 </div>`;

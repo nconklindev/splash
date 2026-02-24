@@ -41,8 +41,8 @@ tailwind.config = {
   {% for col in data.available_columns %}<code class="bg-bg px-1.5 py-0.5 rounded text-xs mx-0.5">{{ col }}</code>{% endfor %}
 </div>
 
-{% if data.per_tenant_json %}
 <div id="selectorBar" class="bg-surface border border-bdr rounded-lg px-5 py-4 mb-8 flex flex-wrap gap-6 items-center">
+  {% if data.per_tenant_json %}
   <div class="flex items-center gap-2">
     <label class="text-sm text-muted font-medium">Tenant</label>
     <select id="tenantDropdown" class="bg-bg border border-bdr text-gray-200 rounded px-3 py-1.5 text-sm">
@@ -56,8 +56,14 @@ tailwind.config = {
       <option value="">All Reports (Tenant)</option>
     </select>
   </div>
+  {% endif %}
+  <div class="flex items-center gap-2 {% if data.per_tenant_json %}ml-auto{% endif %}">
+    <label class="text-sm text-muted font-medium">Timezone</label>
+    <select id="tzSelector" class="bg-bg border border-bdr text-gray-200 rounded px-3 py-1.5 text-sm min-w-[200px]">
+      <option value="UTC">UTC (as stored)</option>
+    </select>
+  </div>
 </div>
-{% endif %}
 
 <div id="viewStack">
 {% include '_stack_view.j2' %}
@@ -173,6 +179,36 @@ function _scatterChart(id, pts) {
         y: { title: { display: true, text: 'File Size (bytes)' } }
       }
     }
+  });
+}
+
+{# ── Timezone utilities (always present) ── #}
+let _currentTZ = 'UTC';
+let _currentTenant = null;
+let _currentReport = null;
+
+function fmtTime(utcStr) {
+  if (!utcStr || !utcStr.includes(' ')) return utcStr || '';
+  if (_currentTZ === 'UTC') return utcStr;
+  try {
+    const d = new Date(utcStr.replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return utcStr;
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: _currentTZ,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const p = {};
+    parts.forEach(x => p[x.type] = x.value);
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+  } catch(e) { return utcStr; }
+}
+
+function convertTimestamps() {
+  document.querySelectorAll('[data-utc]').forEach(el => {
+    const raw = el.dataset.utc;
+    if (raw) el.textContent = fmtTime(raw);
   });
 }
 
@@ -332,6 +368,30 @@ barChart('tenantExecChart',
   PALETTE[0]
 );
 {% endif %}
+
+{# ── Timezone selector init (always present) ── #}
+(function() {
+  const sel = document.getElementById('tzSelector');
+  const localTZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (localTZ !== 'UTC') {
+    sel.appendChild(new Option('Local (' + localTZ + ')', localTZ));
+  }
+  ['America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Phoenix',
+   'Europe/London','Europe/Paris','Asia/Tokyo','Australia/Sydney']
+    .filter(tz => tz !== localTZ)
+    .forEach(tz => sel.appendChild(new Option(tz, tz)));
+  convertTimestamps();
+})();
+
+document.getElementById('tzSelector').addEventListener('change', e => {
+  _currentTZ = e.target.value;
+  convertTimestamps();
+  if (_currentReport && typeof showReportView === 'function') {
+    showReportView(_currentTenant, _currentReport);
+  } else if (_currentTenant && typeof showTenantView === 'function') {
+    showTenantView(_currentTenant);
+  }
+});
 </script>
 </body>
 </html>
