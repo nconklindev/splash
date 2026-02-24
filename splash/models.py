@@ -78,6 +78,8 @@ class TenantSummary:
 class DashboardData:
     title: str
     generated_at: datetime
+    data_start: datetime | None
+    data_end: datetime | None
     total_rows: int
     available_columns: list[str]
     csv_files: list[str]

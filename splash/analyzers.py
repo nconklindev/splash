@@ -772,9 +772,12 @@ def run_all_analyses(
     title: str,
     csv_files: list[str],
 ) -> DashboardData:
+    date_range = dataset.date_range()
     dd = DashboardData(
         title=title,
         generated_at=datetime.now(),
+        data_start=date_range[0],
+        data_end=date_range[1],
         total_rows=len(dataset.rows),
         available_columns=sorted(c.value for c in dataset.available_columns),
         csv_files=csv_files,
