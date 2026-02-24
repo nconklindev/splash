@@ -4,7 +4,7 @@ import csv
 import json
 import sys
 
-# Some CSVs have large fields (e.g. error_stack traces) that exceed the default 128 KB limit.
+# Some CSVs have large fields (e.g., error_stack traces) that exceed the default 128 KB limit.
 # Try sys.maxsize first; fall back to 2^31-1 on Windows where csv uses a C long (32-bit).
 try:
     csv.field_size_limit(sys.maxsize)
@@ -199,3 +199,37 @@ def load_csvs(paths: list[Path]) -> Dataset:
         )
 
     return Dataset(rows=all_rows, available_columns=available, all_headers=all_headers)
+
+
+def filter_by_date(
+    dataset: Dataset,
+    start: "date | None" = None,
+    end: "date | None" = None,
+) -> Dataset:
+    """Return a new Dataset filtered to rows whose start_datetime falls within [start, end].
+
+    Rows with an unparseable or missing start_datetime are always kept.
+    If the dataset has no START_DATETIME column the original dataset is returned unchanged.
+    """
+    if start is None and end is None:
+        return dataset
+    if not dataset.has(Column.START_DATETIME):
+        return dataset
+
+    def _keep(row: dict) -> bool:
+        val = row.get(Column.START_DATETIME)
+        if not isinstance(val, datetime):
+            return True
+        d = val.date()
+        if start and d < start:
+            return False
+        if end and d > end:
+            return False
+        return True
+
+    filtered = [r for r in dataset.rows if _keep(r)]
+    return Dataset(
+        rows=filtered,
+        available_columns=dataset.available_columns,
+        all_headers=dataset.all_headers,
+    )

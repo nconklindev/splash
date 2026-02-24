@@ -25,6 +25,7 @@ tailwind.config = {
 <style>
   /* Tailwind doesn't handle table hover on child elements well, keep this one rule */
   tr:hover td { background: rgba(108, 122, 238, 0.05); }
+  tr.report-hidden, tr.search-hidden { display: none; }
 </style>
 </head>
 <body class="bg-bg text-gray-200 font-sans leading-relaxed p-8">
@@ -57,6 +58,11 @@ tailwind.config = {
     </select>
   </div>
   {% endif %}
+  <div id="reportFilterBadge" class="hidden flex items-center gap-2 bg-bg border border-bdr rounded px-3 py-1.5">
+    <span class="text-xs text-muted">Report filter:</span>
+    <span id="reportFilterLabel" class="text-xs text-accent-light font-medium max-w-[250px] truncate"></span>
+    <button onclick="clearReportFilter()" class="text-muted hover:text-gray-200 text-xs leading-none ml-1" title="Clear filter">&#x2715;</button>
+  </div>
   <div class="flex items-center gap-2 {% if data.per_tenant_json %}ml-auto{% endif %}">
     <label class="text-sm text-muted font-medium">Timezone</label>
     <select id="tzSelector" class="bg-bg border border-bdr text-gray-200 rounded px-3 py-1.5 text-sm min-w-[200px]">
@@ -228,7 +234,7 @@ doughnutChart('reportTypeChart',
 {% endif %}
 
 {# ── Timing charts ── #}
-{% if data.timing %}
+{% if data.timing and not data.per_tenant_json %}
 barChart('durationChart',
   {{ data.timing.duration_buckets.keys() | list | tojson }},
   {{ data.timing.duration_buckets.values() | list | tojson }},
@@ -254,7 +260,7 @@ doughnutChart('errorCodeChart',
   {{ data.errors.error_code_distribution.values() | list | tojson }}
 );
 {% endif %}
-{% if data.errors.failures_per_day %}
+{% if data.errors.failures_per_day and not data.per_tenant_json %}
 lineChart('failuresPerDayChart',
   {{ data.errors.failures_per_day | map(attribute=0) | list | tojson }},
   {{ data.errors.failures_per_day | map(attribute=1) | list | tojson }}
@@ -296,7 +302,7 @@ barChart('failuresByHourChart',
 
 {# ── Engine charts ── #}
 {% if data.engine %}
-{% if data.engine.load_per_engine %}
+{% if data.engine.load_per_engine and not data.per_tenant_json %}
 barChart('engineLoadChart',
   {{ data.engine.load_per_engine.keys() | list | tojson }},
   {{ data.engine.load_per_engine.values() | list | tojson }},
@@ -367,6 +373,137 @@ barChart('tenantExecChart',
   {{ data.tenant_summaries | map(attribute='total_executions') | list | tojson }},
   PALETTE[0]
 );
+
+{# ── Tenant color map ── #}
+const TENANT_COLORS = {};
+Object.keys(TENANT_DATA).forEach(function(t, i) {
+  TENANT_COLORS[t] = PALETTE[i % PALETTE.length];
+});
+
+{# ── Style tenant pills with their assigned colors ── #}
+document.querySelectorAll('.stack-tenant-pill').forEach(function(pill) {
+  const color = TENANT_COLORS[pill.dataset.tenant];
+  if (color) {
+    pill.style.borderColor = color;
+    pill.style.color = color;
+    pill.style.backgroundColor = color + '22';
+  }
+});
+
+{# ── Stacked chart infrastructure ── #}
+let _activeTenants = new Set(Object.keys(TENANT_DATA));
+let _stackedChartInstances = [];
+
+function _destroyStackedCharts() {
+  _stackedChartInstances.forEach(function(c) { if (c) c.destroy(); });
+  _stackedChartInstances = [];
+}
+function _trackStacked(c) { if (c) _stackedChartInstances.push(c); return c; }
+
+function stackedBarChart(id, labels, tenantDatasets, onClickCb) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  const tenantOrder = tenantDatasets.map(function(d) { return d[0]; });
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: tenantDatasets.map(function(d) {
+        return { label: d[0], data: d[1], backgroundColor: TENANT_COLORS[d[0]], borderRadius: 2 };
+      })
+    },
+    options: {
+      responsive: true,
+      aspectRatio: 3,
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+      onClick: function(evt, elements) {
+        if (!elements.length || !onClickCb) return;
+        const tenant = tenantOrder[elements[0].datasetIndex];
+        if (tenant) {
+          document.getElementById('tenantDropdown').value = tenant;
+          onClickCb(tenant);
+        }
+      }
+    }
+  });
+}
+
+function _initStackedCharts() {
+  const tenants = Object.keys(TENANT_DATA).filter(function(t) { return _activeTenants.has(t); });
+  if (!tenants.length) return;
+
+  {# Duration distribution #}
+  const buckets = ['<1s','1-10s','10s-1m','1-5m','5-30m','30m+'];
+  _trackStacked(stackedBarChart('durationChart', buckets,
+    tenants.map(function(t) {
+      const db = TENANT_DATA[t].duration_buckets || {};
+      return [t, buckets.map(function(b) { return db[b] || 0; })];
+    }), showTenantView));
+
+  {# Hourly distribution #}
+  const hours = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+  _trackStacked(stackedBarChart('hourlyChart', hours,
+    tenants.map(function(t) {
+      const hd = TENANT_DATA[t].hourly_distribution || {};
+      return [t, hours.map(function(h) { return hd[h] || hd[String(h)] || 0; })];
+    }), showTenantView));
+
+  {# Weekly distribution #}
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  _trackStacked(stackedBarChart('weeklyChart', days,
+    tenants.map(function(t) {
+      const wd = TENANT_DATA[t].weekly_distribution || {};
+      return [t, days.map(function(d) { return wd[d] || 0; })];
+    }), showTenantView));
+
+  {# Failures per day #}
+  const allDatesSet = new Set();
+  tenants.forEach(function(t) {
+    (TENANT_DATA[t].failures_per_day || []).forEach(function(p) { allDatesSet.add(p[0]); });
+  });
+  const sortedDates = Array.from(allDatesSet).sort();
+  if (sortedDates.length) {
+    _trackStacked(stackedBarChart('failuresPerDayChart', sortedDates,
+      tenants.map(function(t) {
+        const m = {};
+        (TENANT_DATA[t].failures_per_day || []).forEach(function(p) { m[p[0]] = p[1]; });
+        return [t, sortedDates.map(function(d) { return m[d] || 0; })];
+      }), showTenantView));
+  }
+
+  {# Engine load #}
+  const allEnginesSet = new Set();
+  tenants.forEach(function(t) {
+    Object.keys(TENANT_DATA[t].load_per_engine || {}).forEach(function(e) { allEnginesSet.add(e); });
+  });
+  const engineLabels = Array.from(allEnginesSet);
+  if (engineLabels.length) {
+    _trackStacked(stackedBarChart('engineLoadChart', engineLabels,
+      tenants.map(function(t) {
+        const lpe = TENANT_DATA[t].load_per_engine || {};
+        return [t, engineLabels.map(function(e) { return lpe[e] || 0; })];
+      }), showTenantView));
+  }
+}
+
+function toggleTenant(name) {
+  if (_activeTenants.has(name)) {
+    if (_activeTenants.size === 1) return;
+    _activeTenants.delete(name);
+  } else {
+    _activeTenants.add(name);
+  }
+  const pill = document.querySelector('.stack-tenant-pill[data-tenant="' + CSS.escape(name) + '"]');
+  if (pill) pill.style.opacity = _activeTenants.has(name) ? '1' : '0.35';
+  _destroyStackedCharts();
+  _initStackedCharts();
+}
+
+_initStackedCharts();
 {% endif %}
 
 {# ── Timezone selector init (always present) ── #}
@@ -382,6 +519,32 @@ barChart('tenantExecChart',
     .forEach(tz => sel.appendChild(new Option(tz, tz)));
   convertTimestamps();
 })();
+
+{# ── Report cross-filter ── #}
+function setReportFilter(name) {
+  document.getElementById('reportFilterLabel').textContent = name;
+  document.getElementById('reportFilterBadge').classList.remove('hidden');
+  const searchEl = document.getElementById('inventorySearch');
+  if (searchEl) searchEl.value = '';
+  document.querySelectorAll('tr[data-report]').forEach(function(row) {
+    row.classList.toggle('report-hidden', row.dataset.report !== name);
+    row.classList.remove('search-hidden');
+  });
+}
+
+function clearReportFilter() {
+  document.getElementById('reportFilterBadge').classList.add('hidden');
+  document.querySelectorAll('tr[data-report]').forEach(function(row) {
+    row.classList.remove('report-hidden');
+  });
+}
+
+function applyInventorySearch(q) {
+  const lower = q.toLowerCase();
+  document.querySelectorAll('#inventoryTable tr[data-report]').forEach(function(row) {
+    row.classList.toggle('search-hidden', !row.dataset.report.toLowerCase().includes(lower));
+  });
+}
 
 document.getElementById('tzSelector').addEventListener('change', e => {
   _currentTZ = e.target.value;

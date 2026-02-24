@@ -7,12 +7,16 @@ function showStackView() {
   document.getElementById('viewReport').classList.add('hidden');
   document.getElementById('reportSelectorWrap').classList.add('hidden');
   document.getElementById('reportDropdown').value = '';
+  if (typeof _stackedChartInstances !== 'undefined') {
+    _stackedChartInstances.forEach(function(c) { if (c) c.resize(); });
+  }
 }
 
 function showTenantView(tenant) {
   _currentTenant = tenant;
   _currentReport = null;
   _destroyCharts();
+  document.getElementById('tenantDropdown').value = tenant;
   const td = TENANT_DATA[tenant];
   document.getElementById('viewTenant').innerHTML = buildTenantHTML(td, tenant);
   document.getElementById('viewStack').classList.add('hidden');
@@ -130,6 +134,7 @@ function buildTenantHTML(td, tenant) {
 
   // ── Error Analysis ──
   const frClass = td.failure_rate > 10 ? 'text-red-400' : td.failure_rate > 5 ? 'text-orange-400' : 'text-green-400';
+  const timeoutCount = td.adhoc_timeout_count || 0;
   html += `<div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
   <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-bdr">Error Analysis</h2>
   <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4 mb-6">
@@ -145,6 +150,10 @@ function buildTenantHTML(td, tenant) {
       <div class="text-3xl font-bold ${frClass}">${fmtPct(td.failure_rate)}</div>
       <div class="text-xs text-muted mt-1">Failure Rate (%)</div>
     </div>
+    ${timeoutCount ? `<div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-orange-400">${fmtNumber(timeoutCount)}</div>
+      <div class="text-xs text-muted mt-1">Likely ADHOC Timeouts</div>
+    </div>` : ''}
   </div>
   <div class="grid grid-cols-[repeat(auto-fit,minmax(400px,1fr))] gap-6">
     ${td.error_code_distribution ? `<div class="relative w-full max-w-[300px] max-h-[300px] mx-auto">
@@ -205,6 +214,24 @@ function buildTenantHTML(td, tenant) {
       </tr>`;
     }).join('')}</tbody>
   </table>` : ''}
+  ${td.adhoc_timeout_by_report && td.adhoc_timeout_by_report.length ? `
+  <div class="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-200 mt-6">
+    <span class="shrink-0">&#x26A0;</span>
+    <span>Timeout detection is a best-guess algorithm based on ADHOC engine failures with duration between 13–18 minutes. It is not guaranteed to be accurate — always verify against the error stack before drawing conclusions.</span>
+  </div>
+  <h3 class="text-sm font-medium mt-4 mb-2">ADHOC Timeout Candidates by Report</h3>
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
+    <thead><tr>
+      <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeout Count</th>
+      <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Avg Duration</th>
+    </tr></thead>
+    <tbody>${td.adhoc_timeout_by_report.map(r => `<tr>
+      <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr text-orange-400">${r.count}</td>
+      <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.avg_duration_s)}</td>
+    </tr>`).join('')}</tbody>
+  </table>` : ''}
   ${td.failure_detail && td.failure_detail.length ? `<h3 class="text-sm font-medium mt-6 mb-2">Failure Detail Log (${td.failure_detail.length})</h3>
   <div class="overflow-x-auto"><table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead><tr>
@@ -217,16 +244,25 @@ function buildTenantHTML(td, tenant) {
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Code</th>
       <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Error Message</th>
     </tr></thead>
-    <tbody>${td.failure_detail.map(r => `<tr>
+    <tbody>${td.failure_detail.map(r => {
+      let timeoutBadge = '';
+      if (r.timeout_confidence === 'likely') {
+        const tip = 'Duration ' + fmtDuration(r.duration_s) + ' on ADHOC \u2014 probable timeout.' + (r.timeout_keywords_match ? ' Error message confirms timeout keywords.' : ' Verify against the error stack.');
+        timeoutBadge = ` <span class="text-xs bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded px-1.5 py-0.5 font-medium" title="${tip}">TIMEOUT</span>`;
+      } else if (r.timeout_confidence === 'possible') {
+        timeoutBadge = ` <span class="text-xs bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded px-1.5 py-0.5 font-medium" title="Duration ${fmtDuration(r.duration_s)} on ADHOC \u2014 below 15-min threshold. Cross-reference the error message for &apos;SOAP&apos; or &apos;timeout&apos; before concluding.">POSSIBLE TIMEOUT</span>`;
+      }
+      return `<tr>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.report_name)}</td>
-      <td class="px-3 py-2 border-b border-bdr text-red-400">${esc(r.status)}</td>
+      <td class="px-3 py-2 border-b border-bdr text-red-400">${esc(r.status)}${timeoutBadge}</td>
       <td class="px-3 py-2 border-b border-bdr whitespace-nowrap">${fmtTime(r.start)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.duration_s)}</td>
       <td class="text-right px-3 py-2 border-b border-bdr">${fmtDuration(r.queue_s)}</td>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.engine)}</td>
       <td class="px-3 py-2 border-b border-bdr">${esc(r.error_code)}</td>
       <td class="px-3 py-2 border-b border-bdr text-xs break-all max-w-xs">${esc(r.error_message)}</td>
-    </tr>`).join('')}</tbody>
+    </tr>`;
+    }).join('')}</tbody>
   </table></div>` : ''}
 </div>`;
 

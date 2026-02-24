@@ -44,6 +44,8 @@ class ErrorData:
         dict
     ]  # [{report_name, start, concurrent_count, ...}]
     error_message_groups: dict[str, int] | None  # error message -> count
+    adhoc_timeout_count: int = 0
+    adhoc_timeout_by_report: list[dict] = field(default_factory=list)
 
 
 @dataclass

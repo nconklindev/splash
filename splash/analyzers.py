@@ -16,6 +16,12 @@ from .models import (
     TimingData,
 )
 
+ADHOC_ENGINE_ID = 1
+ADHOC_TIMEOUT_MIN_S = 780      # 13 min — lower tolerance bound
+ADHOC_TIMEOUT_THRESHOLD_S = 900  # 15 min — below = "possible", at/above = "likely"
+ADHOC_TIMEOUT_MAX_S = 1080     # 18 min — upper tolerance bound
+_TIMEOUT_KEYWORDS = ("soap", "timeout", "time out")
+
 _DURATION_BUCKETS = [
     ("<1s", 0, 1),
     ("1-10s", 1, 10),
@@ -52,6 +58,32 @@ def _get_start(row: dict) -> datetime | None:
 def _get_end(row: dict) -> datetime | None:
     v = row.get(Column.END_DATETIME) or row.get(Column.BIRT_REPORT_ENDTIME)
     return v if isinstance(v, datetime) else None
+
+
+def _timeout_confidence(row: dict, duration_s: float | None) -> str | None:
+    """Heuristic ADHOC timeout confidence level.
+
+    'likely'   — duration >= 15 min on ADHOC (at or above the known threshold)
+    'possible' — duration 13–<15 min on ADHOC (in range but below threshold)
+    None       — not a timeout candidate
+    """
+    if duration_s is None:
+        return None
+    ae = row.get(Column.ACTUAL_ENGINE)
+    if ae != ADHOC_ENGINE_ID or not _is_failure(row):
+        return None
+    if not (ADHOC_TIMEOUT_MIN_S <= duration_s <= ADHOC_TIMEOUT_MAX_S):
+        return None
+    return "likely" if duration_s >= ADHOC_TIMEOUT_THRESHOLD_S else "possible"
+
+
+def _has_timeout_keywords(row: dict) -> bool:
+    """Check error message/stack for SOAP or timeout-related text."""
+    for col in (Column.ERROR_MESSAGE, Column.ERROR_STACK, Column.ERROR_CODE):
+        text = str(row.get(col, "")).lower()
+        if any(kw in text for kw in _TIMEOUT_KEYWORDS):
+            return True
+    return False
 
 
 def _engine_label(engine_id) -> str:
@@ -262,12 +294,14 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
 
     # 1. Failure detail table
     failure_detail = []
+    _timeout_report_durations: dict[str, list[float]] = {}
     for row in failures:
         start = _get_start(row)
         dur = _get_duration_seconds(row)
         qt = _get_queue_time_seconds(row)
         ae = row.get(Column.ACTUAL_ENGINE)
         status_id = row.get(Column.REPORT_EXECUTION_STATUS_ID)
+        tc = _timeout_confidence(row, dur)
         entry = {
             "report_name": row.get(Column.REPORT_NAME, ""),
             "status": STATUS_LABELS.get(status_id, f"UNKNOWN ({status_id})")
@@ -281,10 +315,29 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
             "engine": _engine_label(ae) if ae is not None and ae != "" else "",
             "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
             "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
+            "timeout_confidence": tc,
+            "timeout_keywords_match": _has_timeout_keywords(row) if tc else False,
         }
         failure_detail.append(entry)
+        if tc and dur is not None:
+            _timeout_report_durations.setdefault(row.get(Column.REPORT_NAME, ""), []).append(dur)
     # Sort by start time desc
     failure_detail.sort(key=lambda x: x["start"], reverse=True)
+
+    # Timeout summary
+    adhoc_timeout_count = sum(1 for e in failure_detail if e["timeout_confidence"])
+    adhoc_timeout_by_report = sorted(
+        [
+            {
+                "report_name": name,
+                "count": len(durs),
+                "avg_duration_s": round(mean(durs), 2),
+            }
+            for name, durs in _timeout_report_durations.items()
+        ],
+        key=lambda x: x["count"],
+        reverse=True,
+    )
 
     # 2. Failure rate by report
     failure_rate_by_report = []
@@ -361,6 +414,8 @@ def analyze_errors(dataset: Dataset) -> ErrorData:
         failures_by_hour=failures_by_hour,
         concurrent_load_at_failure=concurrent_load,
         error_message_groups=error_msg_groups,
+        adhoc_timeout_count=adhoc_timeout_count,
+        adhoc_timeout_by_report=adhoc_timeout_by_report,
     )
 
 
@@ -607,6 +662,7 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
         fs = row.get(Column.OUTPUT_FILE_SIZE)
         oc = row.get(Column.REPORT_OBJECT_COUNT)
         rn = row.get(Column.ROUTE_TO_NODE)
+        tc = _timeout_confidence(row, dur)
         rb["executions"].append(
             {
                 "start": start.strftime("%Y-%m-%d %H:%M:%S")
@@ -626,6 +682,8 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
                 "object_count": oc if isinstance(oc, int) else None,
                 "error_code": str(row.get(Column.ERROR_CODE, "")).strip(),
                 "error_message": str(row.get(Column.ERROR_MESSAGE, "")).strip(),
+                "timeout_confidence": tc,
+                "timeout_keywords_match": _has_timeout_keywords(row) if tc else False,
             }
         )
 
@@ -690,6 +748,8 @@ def _build_tenant_json(tenant_rows: list[dict], dataset: Dataset) -> dict:
         "concurrent_load_at_failure": errors.concurrent_load_at_failure[:20],
         "error_message_groups": errors.error_message_groups,
         "failure_detail": errors.failure_detail[:200],
+        "adhoc_timeout_count": errors.adhoc_timeout_count,
+        "adhoc_timeout_by_report": errors.adhoc_timeout_by_report,
         # Engine
         "load_per_engine": engine.load_per_engine if engine else None,
         "load_per_node": engine.load_per_node if engine else None,

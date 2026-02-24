@@ -1,3 +1,16 @@
+{# ── Tenant chart filter pills (multi-tenant stack view only) ── #}
+{% if data.per_tenant_json %}
+<div class="bg-surface border border-bdr rounded-lg px-5 py-3 mb-6 flex flex-wrap gap-2 items-center">
+  <span class="text-xs text-muted font-medium shrink-0 mr-1">Chart filter:</span>
+  {% for t in data.tenant_summaries %}
+  <button class="stack-tenant-pill px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer"
+          data-tenant="{{ t.schema_name }}"
+          onclick='toggleTenant({{ t.schema_name | tojson }})'>{{ t.schema_name }}</button>
+  {% endfor %}
+  <span class="text-xs text-muted ml-2">— click a bar segment in any chart to drill into that tenant</span>
+</div>
+{% endif %}
+
 {# ── Tenants (only when schema_name column present) ── #}
 {% if data.tenant_summaries %}
 <div class="bg-surface border border-bdr rounded-lg p-6 mb-6">
@@ -83,9 +96,14 @@
   </div>
 
   {% if data.inventory.report_overview %}
-  <h3 class="text-sm font-medium mt-5 mb-2">Report Overview</h3>
+  <div class="flex items-center gap-3 mt-5 mb-2">
+    <h3 class="text-sm font-medium">Report Overview</h3>
+    <input id="inventorySearch" type="text" placeholder="Filter by name…"
+      class="ml-auto bg-bg border border-bdr text-gray-200 rounded px-2 py-1 text-xs w-52 focus:outline-none focus:border-accent"
+      oninput="applyInventorySearch(this.value)" />
+  </div>
   <div class="overflow-x-auto">
-  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
+  <table id="inventoryTable" class="w-full border-collapse text-sm mt-2 overflow-x-auto">
     <thead>
       <tr>
         <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
@@ -99,8 +117,8 @@
     </thead>
     <tbody>
       {% for row in data.inventory.report_overview %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
         {% if data.inventory.reports_by_type %}<td class="px-3 py-2 border-b border-bdr">{{ row.get('report_type', '') }}</td>{% endif %}
         <td class="px-3 py-2 border-b border-bdr">{{ row.hyperfind_name }}</td>
         <td class="px-3 py-2 border-b border-bdr">{{ row.work_unit_hyperfind_name }}</td>
@@ -125,7 +143,7 @@
     </thead>
     <tbody>
       {% for name, count in data.inventory.parameter_variation_counts %}
-      <tr><td class="px-3 py-2 border-b border-bdr">{{ name }}</td><td class="text-right px-3 py-2 border-b border-bdr">{{ count }}</td></tr>
+      <tr data-report="{{ name }}"><td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ name | tojson }})' title="Click to filter all sections to this report">{{ name }}</td><td class="text-right px-3 py-2 border-b border-bdr">{{ count }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -165,8 +183,8 @@
         </thead>
         <tbody>
           {% for row in data.timing.overlapping_runs[:15] %}
-          <tr>
-            <td class="px-3 py-2 border-b border-bdr">{{ row.get('report_name', '') }}</td>
+          <tr data-report="{{ row.get('report_name', '') }}">
+            <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.get("report_name", "") | tojson }})' title="Click to filter all sections to this report">{{ row.get('report_name', '') }}</td>
             {% set ts = row.get('start_datetime', row.get('birt_report_starttime', '')) %}
             <td class="px-3 py-2 border-b border-bdr" data-utc="{{ ts }}">{{ ts }}</td>
             {% set te = row.get('end_datetime', row.get('birt_report_endtime', '')) %}
@@ -196,6 +214,12 @@
       <div class="text-3xl font-bold text-red-400">{{ data.errors.failure_count | fmt_number }}</div>
       <div class="text-xs text-muted mt-1">Failures</div>
     </div>
+    {% if data.errors.adhoc_timeout_count %}
+    <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
+      <div class="text-3xl font-bold text-orange-400">{{ data.errors.adhoc_timeout_count | fmt_number }}</div>
+      <div class="text-xs text-muted mt-1">Likely ADHOC Timeouts</div>
+    </div>
+    {% endif %}
     <div class="bg-bg border border-bdr rounded-lg p-5 text-center">
       <div class="text-3xl font-bold {% if data.errors.failure_rate > 10 %}text-red-400{% elif data.errors.failure_rate > 5 %}text-orange-400{% else %}text-green-400{% endif %}">{{ data.errors.failure_rate | fmt_pct }}</div>
       <div class="text-xs text-muted mt-1">Failure Rate (%)</div>
@@ -281,8 +305,8 @@
     </thead>
     <tbody>
       {% for row in data.errors.concurrent_load_at_failure[:20] %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
         <td class="px-3 py-2 border-b border-bdr" data-utc="{{ row.start }}">{{ row.start }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr {% if row.concurrent_count > 10 %}text-orange-400{% endif %}">{{ row.concurrent_count }}</td>
         <td class="px-3 py-2 border-b border-bdr">{{ row.error_code }}</td>
@@ -306,11 +330,38 @@
     </thead>
     <tbody>
       {% for row in data.errors.failure_rate_by_report %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.name }}</td>
+      <tr data-report="{{ row.name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.name | tojson }})' title="Click to filter all sections to this report">{{ row.name }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">{{ row.total }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr text-red-400">{{ row.failures }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr {% if row.rate > 50 %}text-red-400{% elif row.rate > 10 %}text-orange-400{% else %}text-green-400{% endif %}">{{ row.rate | fmt_pct }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# ADHOC Timeout Candidates #}
+  {% if data.errors.adhoc_timeout_by_report %}
+  <div class="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3 text-sm text-amber-200 mt-6">
+    <span class="shrink-0">&#x26A0;</span>
+    <span>Timeout detection is a best-guess algorithm based on ADHOC engine failures with duration between 13–18 minutes. It is not guaranteed to be accurate — always verify against the error stack before drawing conclusions.</span>
+  </div>
+  <h3 class="text-sm font-medium mt-4 mb-2">ADHOC Timeout Candidates by Report</h3>
+  <table class="w-full border-collapse text-sm mt-2 overflow-x-auto">
+    <thead>
+      <tr>
+        <th class="text-left px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Report Name</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Timeout Count</th>
+        <th class="text-right px-3 py-2 border-b-2 border-bdr text-muted font-semibold text-xs uppercase tracking-wide">Avg Duration</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in data.errors.adhoc_timeout_by_report %}
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr text-orange-400">{{ row.count }}</td>
+        <td class="text-right px-3 py-2 border-b border-bdr">{{ row.avg_duration_s | fmt_duration }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -336,9 +387,18 @@
     </thead>
     <tbody>
       {% for row in data.errors.failure_detail %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
-        <td class="px-3 py-2 border-b border-bdr text-red-400">{{ row.status }}</td>
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
+        <td class="px-3 py-2 border-b border-bdr text-red-400">
+          {{ row.status }}
+          {% if row.timeout_confidence == 'likely' %}
+          <span class="text-xs bg-orange-500/20 text-orange-300 border border-orange-500/30 rounded px-1.5 py-0.5 ml-1 font-medium"
+                title="Duration {{ row.duration_s | fmt_duration }} on ADHOC — probable timeout.{% if row.timeout_keywords_match %} Error message confirms timeout keywords.{% else %} Verify against the error stack.{% endif %}">TIMEOUT</span>
+          {% elif row.timeout_confidence == 'possible' %}
+          <span class="text-xs bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded px-1.5 py-0.5 ml-1 font-medium"
+                title="Duration {{ row.duration_s | fmt_duration }} on ADHOC — below the 15-min threshold. Cross-reference the error message for 'SOAP' or 'timeout' before concluding.">POSSIBLE TIMEOUT</span>
+          {% endif %}
+        </td>
         <td class="px-3 py-2 border-b border-bdr whitespace-nowrap" data-utc="{{ row.start }}">{{ row.start }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">{{ row.duration_s | fmt_duration if row.duration_s is not none else '' }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">{{ row.queue_s | fmt_duration if row.queue_s is not none else '' }}</td>
@@ -390,8 +450,8 @@
     </thead>
     <tbody>
       {% for row in data.engine.mismatch_samples[:10] %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
         <td class="px-3 py-2 border-b border-bdr">{{ row.expected }}</td>
         <td class="px-3 py-2 border-b border-bdr">{{ row.actual }}</td>
       </tr>
@@ -463,8 +523,8 @@
     </thead>
     <tbody>
       {% for row in data.performance.slowest_reports %}
-      <tr>
-        <td class="px-3 py-2 border-b border-bdr">{{ row.report_name }}</td>
+      <tr data-report="{{ row.report_name }}">
+        <td class="px-3 py-2 border-b border-bdr cursor-pointer hover:text-accent-light" onclick='setReportFilter({{ row.report_name | tojson }})' title="Click to filter all sections to this report">{{ row.report_name }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">{{ row.duration_s | fmt_duration }}</td>
         <td class="text-right px-3 py-2 border-b border-bdr">{{ row.get('queue_s', 0) | fmt_duration }}</td>
         <td class="px-3 py-2 border-b border-bdr">{{ row.get('engine', '') }}</td>
