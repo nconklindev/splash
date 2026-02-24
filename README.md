@@ -10,7 +10,7 @@ interactive charts and tables.
 
 ## What It Does
 
-Point it at one or more CSV files from your Splunk/PostgreSQL report history and get a dashboard covering:
+Point it at one or more CSV files containing report history and get a dashboard covering:
 
 - **Report Inventory** — what reports exist, how often they run, their hyperfinds and timeframes, parameter variations
 - **Timing & Scheduling** — duration distribution, hourly/weekly patterns, overlapping runs
@@ -41,14 +41,40 @@ Selecting a specific report shows a dedicated analysis panel with everything you
 | **Queue time over time** | Was the report waiting longer in queue over time?                                                                                                                                                    |
 | **Execution log**        | Every run with start time, duration, queue time, status, engine, expected engine (when mismatches exist), node, file size, object count, error code, and error message. Failure rows are tinted red. |
 
-## Quick Start
+## Installation
 
-Requires Python >= 3.14 and [uv](https://docs.astral.sh/uv/).
+### Option A — uv + git (recommended)
+
+Requires [uv](https://docs.astral.sh/uv/) and [git](https://git-scm.com/downloads). If you don't have uv, follow the
+install instructions on [astral.sh](https://docs.astral.sh/uv/getting-started/installation/) — it's a single command.
 
 ```bash
-# Install
-uv sync
+uv tool install git+https://github.com/nconklindev/splash
+```
 
+That's it. `splash` will be available globally without needing to activate a virtual environment.
+
+To update to the latest version later:
+
+```bash
+uv tool upgrade splash
+```
+
+### Option B — Python + pip (no uv required)
+
+Requires Python >= 3.14. If you need to install Python, download it from [python.org](https://www.python.org/downloads/).
+
+Clone or download this repository using git, then from the repo root:
+
+```bash
+pip install .
+```
+
+`splash` will be available as a command in your active Python environment.
+
+## Quick Start
+
+```bash
 # Generate a dashboard
 splash report_history.csv -o dashboard.html --open
 
