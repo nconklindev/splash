@@ -2,6 +2,14 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
+
+# Some CSVs have large fields (e.g. error_stack traces) that exceed the default 128 KB limit.
+# Try sys.maxsize first; fall back to 2^31-1 on Windows where csv uses a C long (32-bit).
+try:
+    csv.field_size_limit(sys.maxsize)
+except OverflowError:
+    csv.field_size_limit(2**31 - 1)
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
