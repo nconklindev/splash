@@ -1,6 +1,7 @@
 # splash
 
-<span style="color: green"><b>Spl</b></span>unk + D<span style="color: cyan"><b>ash</b></span>board = **Splash**. Yeah, that's
+<span style="color: green"><b>Spl</b></span>unk + D<span style="color: cyan"><b>ash</b></span>board = **Splash**. Yeah,
+that's
 it. That's how it got its name.
 
 Splash is a CLI tool that takes CSV exports of BIRT report execution data and turns them into a self-contained HTML
@@ -49,10 +50,10 @@ Requires Python >= 3.14 and [uv](https://docs.astral.sh/uv/).
 uv sync
 
 # Generate a dashboard
-uv run splash report_history.csv -o dashboard.html --open
+splash report_history.csv -o dashboard.html --open
 
 # Multiple files, custom title
-uv run splash jan.csv feb.csv mar.csv --title "Q1 Report Analysis" -o q1.html
+splash jan.csv feb.csv mar.csv --title "Q1 Report Analysis" -o q1.html
 ```
 
 ## Usage
@@ -63,10 +64,16 @@ splash <CSV_FILE>... [OPTIONS]
 Options:
   -o, --output PATH     Output HTML path (default: splash_report.html)
   --title TEXT           Dashboard title (default: "Splash Report")
+  --start-date DATE      Start date for report inventory (format: YYYY-MM-DD)
+  --end-date DATE        End date for report inventory (format: YYYY-MM-DD)
   --open                Open in browser after generation
   -q, --quiet           Suppress info output
   --version             Show version
 ```
+
+> [!TIP]
+> Use the `--start-date` and `--end-date` options to limit the timeframe of the dashboard. This can be useful when
+> you don't want to include all the data from the entire SQL query.
 
 ## Required CSV Columns
 
@@ -79,18 +86,18 @@ Only two columns are mandatory:
 
 All other columns are optional — the dashboard adapts to what's available:
 
-`schema_name`, `report_type`, `start_datetime`, `end_datetime`, `birt_report_starttime`, `birt_report_endtime`,
+`schema_name`, `id`, `report_type`, `start_datetime`, `end_datetime`, `birt_report_starttime`, `birt_report_endtime`,
 `actual_engine`, `expected_engine`, `requested_engine`, `route_to_node`, `error_code`, `error_message`, `error_stack`,
 `output_file_size`, `report_object_count`, `parameters`
 
 > **Tip:** Including `schema_name` unlocks the multi-tenant drill-down. Including `parameters` enables
 > hyperfind/timeframe extraction and parameter variation analysis.
 
-## Disclaimer: A Note on Timeframe ❗
-
-When running the query to generate the CSV, be sure to include a **WHERE** clause that filters to the timeframe you're
-interested in. When querying for a large number of tenants (e.g. the entire stack), best practice would be to only
-include the last 48 hours of data.
-
 Example: `WHERE start_datetime >= NOW() - INTERVAL '48 HOUR'` OR
 `WHERE DATE(start_datetime) > (CURRENT_DATE - INTERVAL '1 month')`
+
+> [!WARNING]
+> Passing multiple CSV files to splash without an `id` field may result in duplicated data. We do not make any attempts
+> to de-duplicate without the presence of this field. If you are passing multiple CSVs to the CLI, be sure `id` is
+> included in your SQL query and the CSV. A single CSV file without the `id` field will be OK.
+
