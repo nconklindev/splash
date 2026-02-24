@@ -1,0 +1,56 @@
+name: Feature Request
+description: Propose a new analysis, chart, filter, CLI option, or other improvement.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a request, check whether a similar one already exists.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation where the current tool falls short.
+      placeholder: "Example: When a tenant runs hundreds of reports, it's hard to tell which ones are causing engine contention."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like splash to do? Be as specific as you can — mention sections, metrics, chart types, CLI flags, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you thought about and why you ruled them out.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area of the dashboard
+      description: Which section(s) would this affect?
+      multiple: true
+      options:
+        - Report Inventory
+        - Timing & Scheduling
+        - Error Analysis
+        - Engine Routing
+        - Performance
+        - CLI / output options
+        - New section
+        - Other / unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, mockups, example CSV columns, related issues, etc.

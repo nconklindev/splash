@@ -1,0 +1,90 @@
+name: Bug Report
+description: Something crashed, produced wrong output, or behaved unexpectedly.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Fill out as much as you can — especially the CSV shape and error output, which are usually the fastest path to a fix.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: "Example: splash crashes when the CSV contains an empty error_stack column."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: The exact command you ran and any relevant setup.
+      render: shell
+      placeholder: |
+        splash my_export.csv -o report.html
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / error output
+      description: Paste the full traceback or unexpected output here.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: csv_shape
+    attributes:
+      label: CSV shape
+      description: |
+        Paste the header row of your CSV and the approximate row count.
+        Do **not** paste real data — headers only are enough.
+      render: text
+      placeholder: |
+        Columns: report_name, report_execution_status_id, start_datetime, ...
+        ~12 000 rows
+
+  - type: input
+    id: version
+    attributes:
+      label: splash version
+      description: Run `uv run splash --version` and paste the output.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      description: Run `python --version`.
+      placeholder: "3.14.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11 / macOS 15 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Additional context, workarounds you tried, related issues, etc.
