@@ -22,6 +22,7 @@ class Column(StrEnum):
     REPORT_TYPE = "report_type"
     PARAMETERS = "parameters"
     SCHEMA_NAME = "schema_name"
+    JOB_ID = "id"
     # Timing
     START_DATETIME = "start_datetime"
     END_DATETIME = "end_datetime"
@@ -159,6 +160,18 @@ class Dataset:
     def has(self, *columns: Column) -> bool:
         return all(c in self.available_columns for c in columns)
 
+    def date_range(self) -> tuple[datetime, datetime] | None:
+        if not self.has(Column.START_DATETIME):
+            return None
+        dates = [
+            r[Column.START_DATETIME]
+            for r in self.rows
+            if isinstance(r.get(Column.START_DATETIME), datetime)
+        ]
+        if not dates:
+            return None
+        return min(dates), max(dates)
+
 
 def _detect_columns(headers: list[str]) -> set[Column]:
     known = {c.value for c in Column}
@@ -187,6 +200,17 @@ def load_csvs(paths: list[Path]) -> Dataset:
                 if not row.get(Column.REPORT_NAME):
                     continue
                 all_rows.append(row)
+
+    if any(Column.JOB_ID in row for row in all_rows):
+        seen: set = set()
+        deduped: list[dict] = []
+        for row in all_rows:
+            job_id = row.get(Column.JOB_ID)
+            if job_id in seen:
+                continue
+            seen.add(job_id)
+            deduped.append(row)
+        all_rows = deduped
 
     all_headers = sorted(all_headers_set)
     available = _detect_columns(all_headers)
